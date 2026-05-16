@@ -1,4 +1,5 @@
 import type { Player, UsedWord } from "./mock";
+import type { RoomActions } from "./actions";
 
 export type GamePhase =
   | "landing"
@@ -32,4 +33,6 @@ export type GameCtx = {
   toggleMute: () => void;
   simulateReject: number;
   sceneKey: string;
+  /** Server-authoritative actions. `ready` is false on landing or pre-state. */
+  actions: RoomActions;
 };

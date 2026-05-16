@@ -199,7 +199,13 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
           <Button
             className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             style={{ marginTop: 32 }}
-            onClick={() => ctx.setPhase("pick")}
+            onClick={() => {
+              if (ctx.actions.ready) {
+                void ctx.actions.startMatch();
+              } else {
+                ctx.setPhase("pick");
+              }
+            }}
           >
             Start game
           </Button>

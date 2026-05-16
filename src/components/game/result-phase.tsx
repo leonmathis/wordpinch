@@ -87,7 +87,13 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
             </div>
             <Button
               variant="link"
-              onClick={() => ctx.setPhase("matchend")}
+              onClick={() => {
+                if (ctx.actions.ready) {
+                  void ctx.actions.nextRound();
+                } else {
+                  ctx.setPhase("matchend");
+                }
+              }}
               className="link-underline h-auto p-0 gap-1.5 font-mono text-[13px] text-foreground no-underline hover:no-underline"
             >
               Next <ArrowRight strokeWidth={1.7} className="size-[13px]" />

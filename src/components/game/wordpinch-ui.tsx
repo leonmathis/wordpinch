@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { GameCtx, GamePhase } from "@/lib/game/types";
 import type { PersistedGameState } from "@/lib/game/state";
 import { MOCK } from "@/lib/game/mock";
+import { useRoomActions } from "@/lib/game/actions";
 import { useStoredBool, useClientId } from "@/lib/hooks";
 import { useRoomChannel } from "@/lib/use-room-channel";
 import { Landing } from "./landing";
@@ -61,6 +62,12 @@ export function WordpinchUI({
     initialState,
   });
 
+  const actions = useRoomActions({
+    code: channelCode,
+    clientId,
+    state: liveState,
+  });
+
   const toggleMute = React.useCallback(() => {
     setMutedStored(!muted);
   }, [muted, setMutedStored]);
@@ -74,6 +81,22 @@ export function WordpinchUI({
 
   const round = liveState?.round || MOCK.round;
   const total = liveState?.total || MOCK.total;
+  const letterStart = liveState?.pick?.hostLetter || MOCK.letterStart;
+  const letterEnd = liveState?.pick?.guestLetter || MOCK.letterEnd;
+  const resultWord = liveState?.result?.word?.toUpperCase() || MOCK.word;
+  const resultIpa = liveState?.result?.phonetic || MOCK.ipa;
+  const hostScore = liveState?.scores?.host ?? MOCK.you.score;
+  const guestScore = liveState?.scores?.guest ?? MOCK.them.score;
+  const hostName = liveState?.players?.host?.name || MOCK.you.name;
+  const guestName = liveState?.players?.guest?.name || MOCK.them.name;
+  const usedWords = liveState?.usedWords?.length
+    ? liveState.usedWords.map((u) => ({
+        round: u.round,
+        word: u.word,
+        ipa: u.ipa,
+        by: u.by === "host" ? hostName : u.by === "guest" ? guestName : "split",
+      }))
+    : MOCK.used;
 
   const sceneKey = React.useMemo(
     () => `${phase}-${round}-${simulateReject}`,
@@ -90,13 +113,13 @@ export function WordpinchUI({
       setPhase: setLocalPhase,
       round,
       total,
-      letterStart: MOCK.letterStart,
-      letterEnd: MOCK.letterEnd,
-      word: MOCK.word,
-      ipa: MOCK.ipa,
-      you: MOCK.you,
-      them: MOCK.them,
-      used: MOCK.used,
+      letterStart,
+      letterEnd,
+      word: resultWord,
+      ipa: resultIpa,
+      you: { ...MOCK.you, name: hostName, score: hostScore },
+      them: { ...MOCK.them, name: guestName, score: guestScore },
+      used: usedWords,
       roomCode: roomCode ?? MOCK.roomCode,
       url: MOCK.url,
       shareOpen,
@@ -107,11 +130,21 @@ export function WordpinchUI({
       toggleMute,
       simulateReject,
       sceneKey,
+      actions,
     }),
     [
       phase,
       round,
       total,
+      letterStart,
+      letterEnd,
+      resultWord,
+      resultIpa,
+      hostName,
+      hostScore,
+      guestName,
+      guestScore,
+      usedWords,
       shareOpen,
       reconnectOpen,
       muted,
@@ -121,6 +154,7 @@ export function WordpinchUI({
       roomCode,
       openShare,
       closeShare,
+      actions,
     ]
   );
 

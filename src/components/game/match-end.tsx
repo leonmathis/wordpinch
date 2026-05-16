@@ -83,7 +83,13 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
           <Button
             className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             style={{ marginTop: 28 }}
-            onClick={() => ctx.setPhase("lobby")}
+            onClick={() => {
+              if (ctx.actions.ready) {
+                void ctx.actions.rematch();
+              } else {
+                ctx.setPhase("lobby");
+              }
+            }}
           >
             Rematch
           </Button>

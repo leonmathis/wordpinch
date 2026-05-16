@@ -7,14 +7,24 @@ import { LettersDisplay } from "./letters-display";
 
 export function RevealPhase({ ctx }: { ctx: GameCtx }) {
   const [step, setStep] = React.useState(0);
+  const advanceRef = React.useRef(false);
 
   React.useEffect(() => {
     const ts: ReturnType<typeof setTimeout>[] = [];
     for (let i = 1; i <= 4; i++) {
       ts.push(setTimeout(() => setStep(i), i * 700));
     }
+    // After GO + letter template (4.2s), advance to race. Guard against
+    // double-fire on remount.
+    ts.push(
+      setTimeout(() => {
+        if (advanceRef.current) return;
+        advanceRef.current = true;
+        if (ctx.actions.ready) void ctx.actions.advanceToRace();
+      }, 4200)
+    );
     return () => ts.forEach(clearTimeout);
-  }, []);
+  }, [ctx.actions]);
 
   const A = ctx.letterStart;
   const B = ctx.letterEnd;

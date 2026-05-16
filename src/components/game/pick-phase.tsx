@@ -45,7 +45,11 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (val) setLocked(true);
+                  if (!val) return;
+                  setLocked(true);
+                  if (ctx.actions.ready) {
+                    void ctx.actions.lockMyLetter(val);
+                  }
                 }}
                 style={{
                   display: "flex",

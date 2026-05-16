@@ -78,14 +78,17 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ word: lower }),
       });
-      const data = (await res.json()) as { valid?: boolean };
+      const data = (await res.json()) as {
+        valid?: boolean;
+        phonetic?: string;
+      };
       if (!data.valid) {
         triggerReject();
         return;
       }
-      // Valid word — Phase 6 will broadcast a round-win and advance both
-      // clients to the result phase. For now, mark intent in the console.
-      console.log("[race] valid word submitted:", lower);
+      if (ctx.actions.ready) {
+        await ctx.actions.submitWord(lower, "host", data.phonetic);
+      }
     } catch (err) {
       console.warn("[race] validation request failed", err);
       triggerReject();
