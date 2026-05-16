@@ -5,10 +5,17 @@ import type { GameCtx } from "@/lib/game/types";
 import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Play, ArrowRight } from "lucide-react";
+import { playDing } from "@/lib/sound";
 
 export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   const [showDelta, setShowDelta] = React.useState(false);
   React.useEffect(() => {
+    playDing();
+    try {
+      navigator.vibrate?.(10);
+    } catch {
+      /* ignore */
+    }
     const t = setTimeout(() => setShowDelta(true), 400);
     return () => clearTimeout(t);
   }, []);

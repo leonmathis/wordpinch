@@ -6,6 +6,7 @@ import { TopChrome } from "./top-chrome";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
 import { LettersDisplay } from "./letters-display";
+import { playBuzz } from "@/lib/sound";
 
 const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
@@ -44,6 +45,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     // setTimeout(0) keeps the setState async — required by
     // react-hooks/set-state-in-effect when triggerReject is called from an effect.
     setTimeout(() => setReject(true), 0);
+    playBuzz();
     rejectTimerRef.current = setTimeout(() => setReject(false), 220);
   }, []);
 

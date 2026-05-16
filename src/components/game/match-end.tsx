@@ -1,14 +1,19 @@
 "use client";
 
+import * as React from "react";
 import { Fragment } from "react";
 import { useRouter } from "next/navigation";
 import type { GameCtx } from "@/lib/game/types";
 import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { playChime } from "@/lib/sound";
 
 export function MatchEnd({ ctx }: { ctx: GameCtx }) {
   const router = useRouter();
+  React.useEffect(() => {
+    playChime();
+  }, []);
   const youWon = ctx.you.score > ctx.them.score;
 
   return (

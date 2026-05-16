@@ -63,7 +63,7 @@ export function ShareDialog({ open, onOpenChange, roomCode, url }: Props) {
           </Button>
         </div>
 
-        <QR />
+        <QR value={fullUrl} />
 
         <div className="t-label text-center mt-2.5">
           Scan to join — or share the link

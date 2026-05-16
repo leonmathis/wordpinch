@@ -4,6 +4,7 @@ import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
 import { TopChrome } from "./top-chrome";
 import { LettersDisplay } from "./letters-display";
+import { playTick } from "@/lib/sound";
 
 export function RevealPhase({ ctx }: { ctx: GameCtx }) {
   const [step, setStep] = React.useState(0);
@@ -12,7 +13,12 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
   React.useEffect(() => {
     const ts: ReturnType<typeof setTimeout>[] = [];
     for (let i = 1; i <= 4; i++) {
-      ts.push(setTimeout(() => setStep(i), i * 700));
+      ts.push(
+        setTimeout(() => {
+          setStep(i);
+          if (i < 4) playTick();
+        }, i * 700)
+      );
     }
     // After GO + letter template (4.2s), advance to race. Guard against
     // double-fire on remount.
