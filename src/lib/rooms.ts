@@ -26,16 +26,16 @@ const MAX_ATTEMPTS = 6;
 /**
  * Inserts a new room with a unique 4-char code. Retries on unique-constraint
  * collisions up to MAX_ATTEMPTS times before throwing.
+ *
+ * `hostId` is stored in the dedicated `host_id` column (never persisted into
+ * the public `state` JSON) and serves as the bearer token for future mutations.
  */
 export async function createRoom(opts: {
   hostId: string;
   hostName?: string;
 }): Promise<{ code: string; state: PersistedGameState }> {
   const admin = supabaseAdmin();
-  const state = initialGameState({
-    hostId: opts.hostId,
-    hostName: opts.hostName,
-  });
+  const state = initialGameState({ hostName: opts.hostName });
 
   let lastError: unknown = null;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

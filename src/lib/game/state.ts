@@ -20,8 +20,8 @@ export type PersistedGameState = {
     language: "en";
   };
   players: {
-    host: { id: string; name: string } | null;
-    guest: { id: string; name: string } | null;
+    host: { name: string } | null;
+    guest: { name: string } | null;
   };
   pick: {
     hostLetter?: string;
@@ -46,14 +46,18 @@ export type PersistedGameState = {
 /**
  * Returns a fresh `PersistedGameState` for a new room. The host is the player
  * who hit "Create new room"; the guest slot is empty until someone joins.
+ *
+ * NOTE: This function intentionally does NOT take `hostId`. The host's UUID is
+ * the bearer token that authorizes state mutations and must NEVER appear in
+ * the persisted state — it would otherwise leak to every reader of the room
+ * (since GET /api/rooms/[code] returns the state). The UUID lives only in the
+ * `rooms.host_id` column, which is redacted from API responses.
  */
 export function initialGameState({
-  hostId,
   hostName = "you",
 }: {
-  hostId: string;
   hostName?: string;
-}): PersistedGameState {
+} = {}): PersistedGameState {
   return {
     phase: "lobby",
     round: 0,
@@ -69,7 +73,7 @@ export function initialGameState({
       language: "en",
     },
     players: {
-      host: { id: hostId, name: hostName },
+      host: { name: hostName },
       guest: null,
     },
     pick: { firstPicker: "host" },
