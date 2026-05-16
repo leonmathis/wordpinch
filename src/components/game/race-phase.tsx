@@ -27,18 +27,29 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const B = ctx.letterEnd;
   const [val, setVal] = React.useState(A);
   const [reject, setReject] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const left = useRaceTimer(20);
+  const rejectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(
+    () => () => {
+      if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
+    },
+    []
+  );
+
+  const triggerReject = React.useCallback(() => {
+    if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
+    // setTimeout(0) keeps the setState async — required by
+    // react-hooks/set-state-in-effect when triggerReject is called from an effect.
+    setTimeout(() => setReject(true), 0);
+    rejectTimerRef.current = setTimeout(() => setReject(false), 220);
+  }, []);
 
   React.useEffect(() => {
-    if (!ctx.simulateReject) return;
-    const start = setTimeout(() => setReject(true), 0);
-    const end = setTimeout(() => setReject(false), 220);
-    return () => {
-      clearTimeout(start);
-      clearTimeout(end);
-    };
-  }, [ctx.simulateReject]);
+    if (ctx.simulateReject) triggerReject();
+  }, [ctx.simulateReject, triggerReject]);
 
   React.useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
@@ -47,6 +58,40 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const cleaned = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
     setVal(cleaned.startsWith(A) ? cleaned : A + cleaned);
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    const lower = val.toLowerCase();
+    // Local format checks — short-circuit before hitting the API. These rules
+    // match the room settings; once Phase 7 wires real settings in, replace
+    // the constants with reads from ctx.settings.
+    if (val.length < 3 || !val.startsWith(A) || !val.endsWith(B)) {
+      triggerReject();
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/words/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word: lower }),
+      });
+      const data = (await res.json()) as { valid?: boolean };
+      if (!data.valid) {
+        triggerReject();
+        return;
+      }
+      // Valid word — Phase 6 will broadcast a round-win and advance both
+      // clients to the result phase. For now, mark intent in the console.
+      console.log("[race] valid word submitted:", lower);
+    } catch (err) {
+      console.warn("[race] validation request failed", err);
+      triggerReject();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -73,7 +118,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
             </div>
           </div>
 
-          <div className="race-input-wrap">
+          <form onSubmit={onSubmit} className="race-input-wrap">
             <Input
               ref={inputRef}
               className={`${RACE_INPUT_OVERRIDES} ${reject ? "shake flash-destructive" : ""}`}
@@ -81,12 +126,13 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
               onChange={handle}
               placeholder={`${A}${"_".repeat(3)}${B}`}
               aria-label="Your word"
+              disabled={submitting}
             />
             <div
               className="race-progress"
               style={{ width: `${(left / 20) * 100}%` }}
             />
-          </div>
+          </form>
 
           <div className="flex items-center justify-between" style={{ marginTop: 14 }}>
             <div className="t-label flex items-center" style={{ gap: 8 }}>
