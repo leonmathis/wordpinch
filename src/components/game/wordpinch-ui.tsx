@@ -3,8 +3,10 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import type { GameCtx, GamePhase } from "@/lib/game/types";
+import type { PersistedGameState } from "@/lib/game/state";
 import { MOCK } from "@/lib/game/mock";
-import { useStoredBool } from "@/lib/hooks";
+import { useStoredBool, useClientId } from "@/lib/hooks";
+import { useRoomChannel } from "@/lib/use-room-channel";
 import { Landing } from "./landing";
 import { Lobby } from "./lobby";
 import { PickPhase } from "./pick-phase";
@@ -23,6 +25,7 @@ const ShareDialog = dynamic(
 type Props = {
   initialPhase?: GamePhase;
   roomCode?: string;
+  initialState?: PersistedGameState | null;
   showReconnect?: boolean;
 };
 
@@ -40,12 +43,23 @@ const VALID_PHASES: GamePhase[] = [
 export function WordpinchUI({
   initialPhase = "lobby",
   roomCode,
+  initialState = null,
   showReconnect = false,
 }: Props) {
-  const [phase, setPhase] = React.useState<GamePhase>(initialPhase);
+  const clientId = useClientId();
   const [muted, setMutedStored] = useStoredBool("muted");
   const [shareOpen, setShareOpen] = React.useState(false);
   const [simulateReject, setSimulateReject] = React.useState(0);
+  const [localPhase, setLocalPhase] = React.useState<GamePhase>(initialPhase);
+
+  // Subscribe to the room's Realtime channel. Skipped when there's no room
+  // (landing) or no clientId yet (pre-hydration).
+  const channelCode = roomCode && clientId ? roomCode : null;
+  const { state: liveState, status: channelStatus } = useRoomChannel({
+    code: channelCode,
+    clientId: clientId || "00000000-0000-0000-0000-000000000000",
+    initialState,
+  });
 
   const toggleMute = React.useCallback(() => {
     setMutedStored(!muted);
@@ -54,17 +68,28 @@ export function WordpinchUI({
   const openShare = React.useCallback(() => setShareOpen(true), []);
   const closeShare = React.useCallback(() => setShareOpen(false), []);
 
+  // Phase: prefer server state when we have it; otherwise fall back to the
+  // URL / internal phase. Dev phase strip can override via setLocalPhase.
+  const phase: GamePhase = liveState?.phase ?? localPhase;
+
+  const round = liveState?.round || MOCK.round;
+  const total = liveState?.total || MOCK.total;
+
   const sceneKey = React.useMemo(
-    () => `${phase}-${MOCK.round}-${simulateReject}`,
-    [phase, simulateReject]
+    () => `${phase}-${round}-${simulateReject}`,
+    [phase, round, simulateReject]
   );
+
+  const reconnectOpen =
+    showReconnect ||
+    (!!roomCode && (channelStatus === "reconnecting" || channelStatus === "closed"));
 
   const ctx: GameCtx = React.useMemo(
     () => ({
       phase,
-      setPhase,
-      round: MOCK.round,
-      total: MOCK.total,
+      setPhase: setLocalPhase,
+      round,
+      total,
       letterStart: MOCK.letterStart,
       letterEnd: MOCK.letterEnd,
       word: MOCK.word,
@@ -75,7 +100,7 @@ export function WordpinchUI({
       roomCode: roomCode ?? MOCK.roomCode,
       url: MOCK.url,
       shareOpen,
-      reconnectOpen: showReconnect,
+      reconnectOpen,
       openShare,
       closeShare,
       muted,
@@ -85,8 +110,10 @@ export function WordpinchUI({
     }),
     [
       phase,
+      round,
+      total,
       shareOpen,
-      showReconnect,
+      reconnectOpen,
       muted,
       toggleMute,
       simulateReject,
@@ -101,7 +128,7 @@ export function WordpinchUI({
 
   return (
     <div className="wp-root" data-room={ctx.roomCode}>
-      {ctx.reconnectOpen ? <ReconnectBanner /> : null}
+      {reconnectOpen ? <ReconnectBanner /> : null}
 
       {phase === "landing" ? <Landing key={sceneKey} ctx={ctx} /> : null}
       {phase === "lobby" ? <Lobby key={sceneKey} ctx={ctx} /> : null}
@@ -122,7 +149,7 @@ export function WordpinchUI({
       ) : null}
 
       {process.env.NODE_ENV === "development" ? (
-        <DevPhaseNav phase={phase} setPhase={setPhase} setSimulateReject={setSimulateReject} />
+        <DevPhaseNav phase={phase} setPhase={setLocalPhase} setSimulateReject={setSimulateReject} />
       ) : null}
     </div>
   );

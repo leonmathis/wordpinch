@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isValidCode, updateRoomState } from "@/lib/rooms";
 import type { PersistedGameState } from "@/lib/game/state";
+import { broadcastRoomState } from "@/lib/realtime";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,6 +54,9 @@ export async function POST(request: Request, { params }: Params) {
         { status: 403 }
       );
     }
+    // Fire-and-forget broadcast — DB write is the source of truth, missed
+    // broadcasts are recovered on the next page load / reconnect.
+    void broadcastRoomState(code, state as PersistedGameState);
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     console.error("[POST /api/rooms/[code]/state]", err);

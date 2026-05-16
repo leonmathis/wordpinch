@@ -58,6 +58,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
     <WordpinchUI
       initialPhase={phase}
       roomCode={code}
+      initialState={room.state}
       showReconnect={sp.reconnect === "1"}
     />
   );
