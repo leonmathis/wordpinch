@@ -1,12 +1,14 @@
 "use client";
 
 import { Fragment } from "react";
+import { useRouter } from "next/navigation";
 import type { GameCtx } from "@/lib/game/types";
 import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 export function MatchEnd({ ctx }: { ctx: GameCtx }) {
+  const router = useRouter();
   const youWon = ctx.you.score > ctx.them.score;
 
   return (
@@ -89,7 +91,7 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
             variant="ghost"
             className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             style={{ marginTop: 8 }}
-            onClick={() => ctx.setPhase("landing")}
+            onClick={() => router.push("/")}
           >
             Leave
           </Button>
