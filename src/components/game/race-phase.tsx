@@ -50,6 +50,10 @@ function useRaceTimer(total: number, onExpire?: () => void) {
 export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const A = ctx.letterStart;
   const B = ctx.letterEnd;
+  // Number of underscores between A and B = minWordLength - 2 (first + last
+  // letter are the bracket). Drives both the pinned template and the input
+  // placeholder so the minimum is visible at a glance.
+  const gaps = Math.max(0, ctx.minWordLength - 2);
   const [val, setVal] = React.useState(A);
   const [reject, setReject] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -173,7 +177,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       <div className="wp-body" style={{ paddingTop: 56 }}>
         <div className="wp-frame scene">
           <div className="flex items-center justify-between" style={{ marginBottom: 22 }}>
-            <LettersDisplay start={A} end={B} />
+            <LettersDisplay start={A} end={B} gaps={gaps} />
             <div
               className="font-mono tabular-nums"
               style={{
@@ -191,7 +195,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
               className={`${RACE_INPUT_OVERRIDES} ${reject ? "shake flash-destructive" : ""}`}
               value={val}
               onChange={handle}
-              placeholder={`${A}${"_".repeat(3)}${B}`}
+              placeholder={`${A}${"_".repeat(gaps)}${B}`}
               aria-label="Your word"
               // readOnly (not disabled) while submitting: keeps focus on the
               // input so the user can keep trying after a rejected word. The
@@ -213,7 +217,9 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
               />
               <span>{ctx.them.name} is typing</span>
             </div>
-            <div className="t-label">Press Enter to submit</div>
+            <div className="t-label">
+              min {ctx.minWordLength} letters · Enter to submit
+            </div>
           </div>
 
           <ScoreHud

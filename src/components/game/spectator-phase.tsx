@@ -12,6 +12,7 @@ const RACE_INPUT_OVERRIDES =
 export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
   const A = ctx.letterStart;
   const B = ctx.letterEnd;
+  const gaps = Math.max(0, ctx.minWordLength - 2);
 
   return (
     <>
@@ -29,7 +30,7 @@ export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
       <div className="wp-body" style={{ paddingTop: 76 }}>
         <div className="wp-frame scene">
           <div className="flex items-center justify-between" style={{ marginBottom: 22 }}>
-            <LettersDisplay start={A} end={B} />
+            <LettersDisplay start={A} end={B} gaps={gaps} />
             <div className="font-mono tabular-nums" style={{ fontSize: 24 }}>
               14s
             </div>
@@ -40,7 +41,7 @@ export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
               className={`${RACE_INPUT_OVERRIDES} opacity-50`}
               disabled
               value=""
-              placeholder={`${A}${"_".repeat(3)}${B}`}
+              placeholder={`${A}${"_".repeat(gaps)}${B}`}
               readOnly
               aria-label="Spectator view"
             />

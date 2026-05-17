@@ -55,7 +55,15 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
               {label}
             </div>
           ) : null}
-          {step >= 4 ? <LettersDisplay start={A} end={B} variant="template" animated /> : null}
+          {step >= 4 ? (
+            <LettersDisplay
+              start={A}
+              end={B}
+              variant="template"
+              animated
+              gaps={ctx.minWordLength - 2}
+            />
+          ) : null}
           {step >= 4 ? (
             <div
               className="t-label-up"
