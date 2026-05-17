@@ -8,7 +8,12 @@ import type { GamePhase } from "./types";
 export type PersistedGameState = {
   phase: GamePhase;
   round: number;
-  total: number;
+  /**
+   * @deprecated use `settings.rounds` instead. Kept on the type for backward
+   * compat with rows seeded before settings was the source of truth; new
+   * writers should not set this field.
+   */
+  total?: number;
   scores: { host: number; guest: number };
   settings: {
     rounds: number;
@@ -64,7 +69,6 @@ export function initialGameState({
   return {
     phase: "lobby",
     round: 0,
-    total: 5,
     scores: { host: 0, guest: 0 },
     settings: {
       rounds: 5,

@@ -1,5 +1,6 @@
 import type { Player, UsedWord } from "./mock";
 import type { RoomActions } from "./actions";
+import type { PersistedGameState } from "./state";
 
 export type GamePhase =
   | "landing"
@@ -22,7 +23,17 @@ export type GameCtx = {
   setPhase: (p: GamePhase) => void;
   round: number;
   total: number;
+  /** Full settings object. Most consumers should read individual fields below. */
+  settings: PersistedGameState["settings"];
   roundTimerSec: number;
+  minWordLength: number;
+  /** Whose turn it is to set the *first* letter this round. */
+  firstPicker: "host" | "guest";
+  /**
+   * Whether the local player is the host. Phase 6: always true once we have
+   * a roomCode. Phase 7 will read this from a server role-resolution call.
+   */
+  meIsHost: boolean;
   letterStart: string;
   letterEnd: string;
   word: string;

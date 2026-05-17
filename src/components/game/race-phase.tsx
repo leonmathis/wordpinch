@@ -89,10 +89,13 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     e.preventDefault();
     if (submitting) return;
     const lower = val.toLowerCase();
-    // Local format checks — short-circuit before hitting the API. These rules
-    // match the room settings; once Phase 7 wires real settings in, replace
-    // the constants with reads from ctx.settings.
-    if (val.length < 3 || !val.startsWith(A) || !val.endsWith(B)) {
+    // Local format checks — short-circuit before hitting the API. Honor the
+    // minimum-word-length setting from state.settings (default 3).
+    if (
+      val.length < ctx.minWordLength ||
+      !val.startsWith(A) ||
+      !val.endsWith(B)
+    ) {
       triggerReject();
       return;
     }

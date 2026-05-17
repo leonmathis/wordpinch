@@ -15,9 +15,6 @@ const SETTINGS_LABEL = "t-label font-mono text-[13px] text-muted-foreground trac
 
 export function Lobby({ ctx }: { ctx: GameCtx }) {
   const [copied, setCopied] = React.useState(false);
-  const [tie, setTie] = React.useState<string[]>(["replay"]);
-  const [allowProper, setAllowProper] = React.useState(false);
-  const [audioDefs, setAudioDefs] = React.useState(true);
   const tieLabelId = React.useId();
   const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -113,8 +110,15 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </Label>
                 <Input
                   id="lobby-rounds"
+                  type="number"
+                  min={1}
+                  max={15}
                   className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
-                  defaultValue="5"
+                  value={ctx.settings.rounds}
+                  onChange={(e) => {
+                    const n = Math.max(1, Math.min(15, parseInt(e.target.value, 10) || 1));
+                    if (ctx.actions.ready) void ctx.actions.setSettings({ rounds: n });
+                  }}
                 />
               </div>
               <Separator />
@@ -124,8 +128,15 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </Label>
                 <Input
                   id="lobby-timer"
+                  type="number"
+                  min={5}
+                  max={300}
                   className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
-                  defaultValue="20s"
+                  value={ctx.settings.roundTimerSec}
+                  onChange={(e) => {
+                    const n = Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 60));
+                    if (ctx.actions.ready) void ctx.actions.setSettings({ roundTimerSec: n });
+                  }}
                 />
               </div>
               <Separator />
@@ -135,8 +146,15 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </Label>
                 <Input
                   id="lobby-min-length"
+                  type="number"
+                  min={2}
+                  max={10}
                   className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
-                  defaultValue="3"
+                  value={ctx.settings.minWordLength}
+                  onChange={(e) => {
+                    const n = Math.max(2, Math.min(10, parseInt(e.target.value, 10) || 3));
+                    if (ctx.actions.ready) void ctx.actions.setSettings({ minWordLength: n });
+                  }}
                 />
               </div>
               <Separator />
@@ -146,8 +164,18 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </span>
                 <ToggleGroup
                   aria-labelledby={tieLabelId}
-                  value={tie}
-                  onValueChange={(v) => v.length && setTie(v)}
+                  value={[ctx.settings.tieBehavior]}
+                  onValueChange={(v) => {
+                    const next = v[0];
+                    if (
+                      next === "replay" ||
+                      next === "split" ||
+                      next === "nobody"
+                    ) {
+                      if (ctx.actions.ready)
+                        void ctx.actions.setSettings({ tieBehavior: next });
+                    }
+                  }}
                   className="rounded-md border border-border overflow-hidden"
                 >
                   <ToggleGroupItem
@@ -177,8 +205,11 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </Label>
                 <Switch
                   id="lobby-allow-proper"
-                  checked={allowProper}
-                  onCheckedChange={setAllowProper}
+                  checked={ctx.settings.allowProperNouns}
+                  onCheckedChange={(v) => {
+                    if (ctx.actions.ready)
+                      void ctx.actions.setSettings({ allowProperNouns: v });
+                  }}
                 />
               </div>
               <Separator />
@@ -188,8 +219,11 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </Label>
                 <Switch
                   id="lobby-audio-defs"
-                  checked={audioDefs}
-                  onCheckedChange={setAudioDefs}
+                  checked={ctx.settings.audioDefinitions}
+                  onCheckedChange={(v) => {
+                    if (ctx.actions.ready)
+                      void ctx.actions.setSettings({ audioDefinitions: v });
+                  }}
                 />
               </div>
               <Separator />

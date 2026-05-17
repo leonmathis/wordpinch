@@ -28,7 +28,8 @@ function speakFallback(word: string) {
 
 export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   const [showDelta, setShowDelta] = React.useState(false);
-  const [suggestions, setSuggestions] = React.useState<string[]>([]);
+  // null = still loading, [] = loaded with no matching words, [w…] = words.
+  const [suggestions, setSuggestions] = React.useState<string[] | null>(null);
   React.useEffect(() => {
     playDing();
     try {
@@ -40,6 +41,21 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     return () => clearTimeout(t);
   }, []);
 
+  // Auto-advance after the 5s advance-bar fill completes. Both clients fire
+  // the action; only the host's POST succeeds (guests 403 silently), which
+  // matches the rest of Phase 6.
+  React.useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      if (ctx.actions.ready) void ctx.actions.nextRound();
+    }, 5200);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [ctx.actions]);
+
   const isTimeout = ctx.winner === "none";
 
   // On timeout, fetch a handful of words that WOULD have worked, so the
@@ -49,20 +65,26 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     const start = ctx.letterStart?.toLowerCase();
     const end = ctx.letterEnd?.toLowerCase();
     if (!start || !end) return;
-    const params = new URLSearchParams({ start, end, min: "3" });
+    const params = new URLSearchParams({
+      start,
+      end,
+      min: String(ctx.minWordLength),
+    });
     let cancelled = false;
     fetch(`/api/words/suggest?${params}`)
       .then((r) => (r.ok ? (r.json() as Promise<SuggestResponse>) : null))
       .then((data) => {
-        if (!cancelled && data?.suggestions?.length) {
-          setSuggestions(data.suggestions);
-        }
+        if (cancelled) return;
+        // [] = loaded but no matches (legit terminal state).
+        setSuggestions(data?.suggestions ?? []);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setSuggestions([]);
+      });
     return () => {
       cancelled = true;
     };
-  }, [isTimeout, ctx.letterStart, ctx.letterEnd]);
+  }, [isTimeout, ctx.letterStart, ctx.letterEnd, ctx.minWordLength]);
 
   const playPronunciation = React.useCallback(() => {
     // 1. Prefer the dictionary API's audio file when available.
@@ -156,13 +178,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               <div className="t-label-up" style={{ marginBottom: 8 }}>
                 Words you could have played
               </div>
-              {suggestions.length > 0 ? (
-                <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[14px]">
-                  {suggestions.map((w) => (
-                    <span key={w}>{w}</span>
-                  ))}
-                </div>
-              ) : (
+              {suggestions === null ? (
                 <div className="t-label">
                   Looking for examples
                   <span className="typing-dots ml-1">
@@ -170,6 +186,20 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                     <i />
                     <i />
                   </span>
+                </div>
+              ) : suggestions.length === 0 ? (
+                <div className="t-label">
+                  No {ctx.minWordLength}+ letter words start with{" "}
+                  <b style={{ color: "var(--foreground)" }}>{ctx.letterStart}</b>{" "}
+                  and end with{" "}
+                  <b style={{ color: "var(--foreground)" }}>{ctx.letterEnd}</b>
+                  . Tough round.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[14px]">
+                  {suggestions.map((w) => (
+                    <span key={w}>{w}</span>
+                  ))}
                 </div>
               )}
             </div>

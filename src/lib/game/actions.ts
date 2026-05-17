@@ -29,6 +29,11 @@ export type RoomActions = {
   ready: boolean;
   startMatch: () => Promise<void>;
   /**
+   * Host-only mutation that updates room settings. Used by the Lobby controls.
+   * Pass any subset of settings — unset keys are kept as-is.
+   */
+  setSettings: (partial: Partial<PersistedGameState["settings"]>) => Promise<void>;
+  /**
    * Locks the caller's letter for this round and advances the phase. Phase 6
    * is host-only — we randomize the opponent letter here so a single client
    * can drive the round flow end-to-end. Phase 7 splits this into separate
@@ -89,16 +94,24 @@ export function useRoomActions(opts: {
         });
       },
 
+      setSettings: async (partial) => {
+        if (!state) return;
+        await postState({
+          ...state,
+          settings: { ...state.settings, ...partial },
+        });
+      },
+
       lockMyLetter: async (letter) => {
         if (!state || !letter) return;
-        const myLetter = letter[0].toUpperCase();
-        const opp = randomLetter();
-        // Whoever picks first sets the start letter; the other sets the end.
-        const hostFirst = state.pick.firstPicker === "host";
+        // Phase 6: caller is the host. Their letter is hostLetter; we
+        // randomize guestLetter so a single user can drive the round. Which
+        // of host/guest ends up as the WORD'S start vs end is purely a
+        // display-time mapping driven by state.pick.firstPicker.
         const pick = {
           firstPicker: state.pick.firstPicker,
-          hostLetter: hostFirst ? myLetter : opp,
-          guestLetter: hostFirst ? opp : myLetter,
+          hostLetter: letter[0].toUpperCase(),
+          guestLetter: randomLetter(),
         };
         await postState({ ...state, pick, phase: "reveal" });
       },
@@ -151,7 +164,8 @@ export function useRoomActions(opts: {
       nextRound: async () => {
         if (!state) return;
         // Match over — go to matchend.
-        if (state.round >= state.total) {
+        const rounds = state.settings.rounds;
+        if (state.round >= rounds) {
           await postState({ ...state, phase: "matchend" });
           return;
         }

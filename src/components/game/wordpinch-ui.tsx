@@ -81,12 +81,36 @@ export function WordpinchUI({
 
   const round = liveState?.round
     ?? (!roomCode ? MOCK.round : 0);
-  const total = liveState?.total
+  // settings.rounds is the source of truth; state.total is legacy / fallback.
+  const total = liveState?.settings?.rounds
+    ?? liveState?.total
     ?? (!roomCode ? MOCK.total : 5);
-  const roundTimerSec = liveState?.settings?.roundTimerSec ?? 60;
-  const letterStart = liveState?.pick?.hostLetter
+  const liveSettings = liveState?.settings;
+  const settings = React.useMemo(
+    () =>
+      liveSettings ?? {
+        rounds: 5,
+        roundTimerSec: 60,
+        minWordLength: 3,
+        tieBehavior: "replay" as const,
+        allowProperNouns: false,
+        audioDefinitions: true,
+        language: "en" as const,
+      },
+    [liveSettings]
+  );
+  const roundTimerSec = settings.roundTimerSec;
+  const minWordLength = settings.minWordLength;
+  const firstPicker = liveState?.pick?.firstPicker ?? "host";
+  const hostLetter = liveState?.pick?.hostLetter;
+  const guestLetter = liveState?.pick?.guestLetter;
+  // letterStart = the firstPicker's letter; letterEnd = the other player's.
+  // (Previously we hard-mapped hostLetter→start, which broke alternation.)
+  const letterStart =
+    (firstPicker === "host" ? hostLetter : guestLetter)
     ?? (!roomCode ? MOCK.letterStart : "");
-  const letterEnd = liveState?.pick?.guestLetter
+  const letterEnd =
+    (firstPicker === "host" ? guestLetter : hostLetter)
     ?? (!roomCode ? MOCK.letterEnd : "");
   // Limit MOCK fallbacks to the landing-only preview. In a real room we want
   // genuine empty state to flow through instead of MOCK leaking in.
@@ -138,7 +162,11 @@ export function WordpinchUI({
       setPhase: setLocalPhase,
       round,
       total,
+      settings,
       roundTimerSec,
+      minWordLength,
+      firstPicker,
+      meIsHost: true, // Phase 6 single-host. Phase 7 will resolve via /api/rooms/[code]/me.
       letterStart,
       letterEnd,
       word: resultWord,
@@ -165,7 +193,10 @@ export function WordpinchUI({
       phase,
       round,
       total,
+      settings,
       roundTimerSec,
+      minWordLength,
+      firstPicker,
       letterStart,
       letterEnd,
       resultWord,

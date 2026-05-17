@@ -38,7 +38,14 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
                 lineHeight: 1.2,
               }}
             >
-              You pick the <strong style={{ fontWeight: 600 }}>first</strong> letter
+              You pick the{" "}
+              <strong style={{ fontWeight: 600 }}>
+                {(ctx.meIsHost && ctx.firstPicker === "host") ||
+                (!ctx.meIsHost && ctx.firstPicker === "guest")
+                  ? "first"
+                  : "last"}
+              </strong>{" "}
+              letter
             </div>
 
             {!locked ? (
