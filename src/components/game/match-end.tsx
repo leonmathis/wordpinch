@@ -99,26 +99,57 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
 
           <section style={{ marginTop: 28 }}>
             <div className="t-label-up" style={{ marginBottom: 8 }}>
-              Words played
+              Rounds
             </div>
             <div>
               <Separator />
-              {/* Key combines round + by + word so split rounds (which write
-               *  two usedWords entries per round, one per submitter) don't
-               *  collide on `round` alone. */}
-              {ctx.used.map((u, i) => (
-                <Fragment key={`${u.round}-${u.by}-${u.word}`}>
-                  <div className="used-row">
-                    <div className="flex items-baseline gap-3 min-w-0">
-                      <span className="meta">Rd {u.round}</span>
-                      <span className="word truncate">{u.word}</span>
-                      <span className="ipa">{u.ipa}</span>
-                    </div>
-                    <span className="by">won by {u.by}</span>
-                  </div>
-                  {i < ctx.used.length - 1 ? <Separator /> : null}
-                </Fragment>
-              ))}
+              {/* Render one block per round 1..total so the list mirrors
+               *  the match's structure — earlier this was an unfiltered
+               *  map over usedWords, which skipped any round that didn't
+               *  produce a written word (nobody-tie, timeout, forfeit).
+               *  Now those rounds get a "no word played" row instead. */}
+              {(() => {
+                const rows: React.ReactNode[] = [];
+                const total = ctx.total;
+                for (let r = 1; r <= total; r++) {
+                  const entries = ctx.used.filter((u) => u.round === r);
+                  if (entries.length === 0) {
+                    rows.push(
+                      <Fragment key={`empty-${r}`}>
+                        <div className="used-row">
+                          <div className="flex items-baseline gap-3 min-w-0">
+                            <span className="meta">Rd {r}</span>
+                            <span className="text-muted-foreground italic">
+                              no word played
+                            </span>
+                          </div>
+                          <span className="by">—</span>
+                        </div>
+                        {r < total ? <Separator /> : null}
+                      </Fragment>
+                    );
+                  } else {
+                    entries.forEach((u, i) => {
+                      rows.push(
+                        <Fragment key={`${u.round}-${u.by}-${u.word}-${i}`}>
+                          <div className="used-row">
+                            <div className="flex items-baseline gap-3 min-w-0">
+                              <span className="meta">Rd {u.round}</span>
+                              <span className="word truncate">{u.word}</span>
+                              <span className="ipa">{u.ipa}</span>
+                            </div>
+                            <span className="by">won by {u.by}</span>
+                          </div>
+                          {(r < total || i < entries.length - 1) ? (
+                            <Separator />
+                          ) : null}
+                        </Fragment>
+                      );
+                    });
+                  }
+                }
+                return rows;
+              })()}
               <Separator />
             </div>
           </section>
