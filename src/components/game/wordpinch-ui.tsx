@@ -173,6 +173,7 @@ export function WordpinchUI({
             : u.by === "guest"
             ? guestName
             : "split",
+        timeMs: u.timeMs,
       })) ?? [],
     [liveUsedWords, hostName, guestName]
   );

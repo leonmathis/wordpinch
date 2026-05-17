@@ -6,9 +6,47 @@ import { useRouter } from "next/navigation";
 import type { GameCtx } from "@/lib/game/types";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import type { UsedWord } from "@/lib/game/types";
 import { Avatar } from "./avatar";
 import { playChime } from "@/lib/sound";
 import confetti from "canvas-confetti";
+
+/**
+ * One cell in the round-summary grid: a player's word + their time (if
+ * available). The winner of the round renders at full opacity; the
+ * loser (or empty slot) renders dimmed. Pre-formatted secs in tabular
+ * mono so the column stays aligned.
+ */
+function PlayerCell({
+  entry,
+  dim,
+}: {
+  entry: UsedWord | undefined;
+  dim: boolean;
+}) {
+  if (!entry) {
+    return (
+      <div className="self-center" style={{ padding: "10px 12px" }}>
+        <span className="text-muted-foreground">—</span>
+      </div>
+    );
+  }
+  const secs =
+    entry.timeMs !== undefined ? (entry.timeMs / 1000).toFixed(1) : null;
+  return (
+    <div
+      className="self-center flex items-baseline gap-2 min-w-0"
+      style={{ padding: "10px 12px", opacity: dim ? 0.55 : 1 }}
+    >
+      <span className="word truncate">{entry.word}</span>
+      {secs !== null ? (
+        <span className="text-muted-foreground tabular-nums text-[12px]">
+          {secs}s
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function MatchEnd({ ctx }: { ctx: GameCtx }) {
   const router = useRouter();
@@ -102,55 +140,77 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               Rounds
             </div>
             <div>
-              <Separator />
-              {/* Render one block per round 1..total so the list mirrors
-               *  the match's structure — earlier this was an unfiltered
-               *  map over usedWords, which skipped any round that didn't
-               *  produce a written word (nobody-tie, timeout, forfeit).
-               *  Now those rounds get a "no word played" row instead. */}
-              {(() => {
-                const rows: React.ReactNode[] = [];
-                const total = ctx.total;
-                for (let r = 1; r <= total; r++) {
+              {/* Two-column round summary: viewer's own attempts on the
+               *  left, opponent's on the right. One row per round, so an
+               *  N-round match always renders exactly N rows regardless
+               *  of how each round ended. Empty cell ("—") = that player
+               *  didn't have a valid submission recorded for that round
+               *  (timeout, forfeit, or the other side of a solo win). */}
+              <div
+                className="font-mono"
+                style={{
+                  fontSize: 13,
+                  display: "grid",
+                  gridTemplateColumns: "auto 1fr 1fr",
+                  columnGap: 12,
+                }}
+              >
+                <Separator className="col-span-3" />
+                <div
+                  className="meta text-muted-foreground"
+                  style={{ padding: "10px 12px 6px" }}
+                >
+                  &nbsp;
+                </div>
+                <div
+                  className="flex items-center gap-2"
+                  style={{ padding: "10px 12px 6px" }}
+                >
+                  <Avatar name={ctx.you.name} size={18} />
+                  <span className="text-muted-foreground">{ctx.you.name}</span>
+                </div>
+                <div
+                  className="flex items-center gap-2"
+                  style={{ padding: "10px 12px 6px" }}
+                >
+                  <Avatar name={ctx.them.name} size={18} />
+                  <span className="text-muted-foreground">{ctx.them.name}</span>
+                </div>
+                <Separator className="col-span-3" />
+                {Array.from({ length: ctx.total }, (_, i) => i + 1).map((r) => {
                   const entries = ctx.used.filter((u) => u.round === r);
-                  if (entries.length === 0) {
-                    rows.push(
-                      <Fragment key={`empty-${r}`}>
-                        <div className="used-row">
-                          <div className="flex items-baseline gap-3 min-w-0">
-                            <span className="meta">Rd {r}</span>
-                            <span className="text-muted-foreground italic">
-                              no word played
-                            </span>
-                          </div>
-                          <span className="by">—</span>
-                        </div>
-                        {r < total ? <Separator /> : null}
-                      </Fragment>
-                    );
-                  } else {
-                    entries.forEach((u, i) => {
-                      rows.push(
-                        <Fragment key={`${u.round}-${u.by}-${u.word}-${i}`}>
-                          <div className="used-row">
-                            <div className="flex items-baseline gap-3 min-w-0">
-                              <span className="meta">Rd {u.round}</span>
-                              <span className="word truncate">{u.word}</span>
-                              <span className="ipa">{u.ipa}</span>
-                            </div>
-                            <span className="by">won by {u.by}</span>
-                          </div>
-                          {(r < total || i < entries.length - 1) ? (
-                            <Separator />
-                          ) : null}
-                        </Fragment>
-                      );
-                    });
-                  }
-                }
-                return rows;
-              })()}
-              <Separator />
+                  const yourEntry = entries.find(
+                    (u) => u.by === ctx.you.name
+                  );
+                  const theirEntry = entries.find(
+                    (u) => u.by === ctx.them.name
+                  );
+                  // Highlight whichever entry was first (lower timeMs) — that's
+                  // the round winner. Solo wins still set the winner's time;
+                  // late-arriving near-misses also carry a time so we can rank.
+                  const yourTime = yourEntry?.timeMs;
+                  const theirTime = theirEntry?.timeMs;
+                  const yourFirst =
+                    yourTime !== undefined &&
+                    (theirTime === undefined || yourTime < theirTime);
+                  const theirFirst =
+                    theirTime !== undefined &&
+                    (yourTime === undefined || theirTime < yourTime);
+                  return (
+                    <Fragment key={r}>
+                      <div
+                        className="meta text-muted-foreground self-center"
+                        style={{ padding: "10px 0 10px 12px" }}
+                      >
+                        Rd {r}
+                      </div>
+                      <PlayerCell entry={yourEntry} dim={!yourFirst && theirFirst} />
+                      <PlayerCell entry={theirEntry} dim={!theirFirst && yourFirst} />
+                      <Separator className="col-span-3" />
+                    </Fragment>
+                  );
+                })}
+              </div>
             </div>
           </section>
 

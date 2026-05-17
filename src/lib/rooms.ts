@@ -302,6 +302,22 @@ type PendingAttempt = NonNullable<PersistedGameState["pendingResult"]>["attempts
 const NEAR_MISS_WINDOW_MS = 1500;
 
 /**
+ * Wall-clock submission time → milliseconds elapsed since the round's
+ * race started. Used to stamp `usedWords[].timeMs` so the match-end
+ * summary can show how fast each player was. Returns undefined if the
+ * round somehow has no `raceStartedAt` (defensive — shouldn't happen
+ * for any submission that reached this code path).
+ */
+function relativeMs(
+  state: PersistedGameState,
+  submittedAt: number
+): number | undefined {
+  return state.raceStartedAt
+    ? Math.max(0, submittedAt - state.raceStartedAt)
+    : undefined;
+}
+
+/**
  * Append a late-arriving submission to `result.attempts`. Used when the
  * loser's `/submit` lands after `resolveRound` has already committed a
  * solo winner, but within {@link NEAR_MISS_WINDOW_MS}. The result phase
@@ -325,18 +341,33 @@ async function recordNearMiss(opts: {
     return { ok: false, reason: "already_decided" };
   }
   const word = opts.word.trim().toLowerCase();
+  const submittedAt = Date.now();
   const newAttempts = [
     ...existing,
     {
       by: role,
       word,
       ipa: opts.phonetic,
-      submittedAt: Date.now(),
+      submittedAt,
+    },
+  ];
+  // Also append to usedWords so the loser's valid attempt shows up in
+  // the match-end round summary alongside the winner's, with the same
+  // time-relative stamp as a normal submission.
+  const newUsedWords = [
+    ...room.state.usedWords,
+    {
+      round: room.state.round,
+      word,
+      ipa: opts.phonetic ?? "",
+      by: role,
+      timeMs: relativeMs(room.state, submittedAt),
     },
   ];
   const nextState: PersistedGameState = {
     ...room.state,
     result: { ...result, attempts: newAttempts },
+    usedWords: newUsedWords,
   };
   const admin = supabaseAdmin();
   const { data, error } = await admin
@@ -546,7 +577,13 @@ function computeFinalState(
       },
       usedWords: [
         ...state.usedWords,
-        { round: state.round, word: a.word, ipa: a.phonetic ?? "", by: a.by },
+        {
+          round: state.round,
+          word: a.word,
+          ipa: a.phonetic ?? "",
+          by: a.by,
+          timeMs: relativeMs(state, a.submittedAt),
+        },
       ],
       scores:
         a.by === "host"
@@ -590,6 +627,7 @@ function computeFinalState(
           word: a.word,
           ipa: a.phonetic ?? "",
           by: a.by,
+          timeMs: relativeMs(state, a.submittedAt),
         })),
       ],
       scores: {

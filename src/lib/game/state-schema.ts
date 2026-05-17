@@ -101,6 +101,7 @@ export const persistedGameStateSchema = z.object({
         word: WORD,
         ipa: PHONETIC,
         by: z.enum(["host", "guest", "split"]),
+        timeMs: z.number().int().nonnegative().optional(),
       })
     )
     .max(1000),

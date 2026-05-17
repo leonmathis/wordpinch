@@ -106,6 +106,14 @@ export type PersistedGameState = {
     word: string;
     ipa: string;
     by: "host" | "guest" | "split";
+    /**
+     * Milliseconds from raceStartedAt → submission. Used by the match-end
+     * round summary to show how fast each player was. Optional for
+     * forward-compat: entries written before this field existed (or by
+     * synthetic paths that don't have a real submission timestamp) just
+     * render without a time.
+     */
+    timeMs?: number;
   }[];
   createdAt: number;
 };

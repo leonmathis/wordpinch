@@ -5,13 +5,17 @@ import type { PersistedGameState } from "./state";
  *  (in state.players), but the UI thinks in name+score pairs. */
 export type Player = { name: string; score: number };
 
-/** A row in the "Words played" history. `by` is the display name of the
- *  player who won the round (or "split" for tie outcomes). */
+/** A row in the per-round word log. `by` is the display *name* of the
+ *  player who submitted this word (or "split" for legacy entries). */
 export type UsedWord = {
   round: number;
   word: string;
   ipa: string;
   by: string;
+  /** Time from raceStartedAt to submission, in ms. Shown as "x.x s" in
+   *  the match-end summary cells; absent for entries pre-dating the
+   *  field. */
+  timeMs?: number;
 };
 
 export type GamePhase =
