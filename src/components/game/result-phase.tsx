@@ -92,11 +92,25 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   const isReplayPending = ctx.resultReason === "replay_pending";
   const isNone = ctx.winner === "none";
   const isSplit = ctx.winner === "split";
+  const isSingleWinner = ctx.winner === "host" || ctx.winner === "guest";
   // For score-row +1 floats: replay_pending uses winner='split' for the
   // "both" framing but doesn't actually award points, so exclude it.
   const isScoredSplit = isSplit && !isReplayPending;
   const sideBySideAttempts = ctx.resultAttempts ?? [];
-  const hasSideBySide = sideBySideAttempts.length >= 2;
+  // Near-miss: a solo winner with 2 attempts in result.attempts means
+  // the loser submitted shortly after the resolver committed. Show the
+  // pair with a "won by N ms" diff. Excludes the forfeit case (no real
+  // race) and the timeout case (no submissions to compare).
+  const isNearMiss =
+    isSingleWinner &&
+    !isForfeit &&
+    !isTimeout &&
+    sideBySideAttempts.length >= 2;
+  const nearMissDiffMs = isNearMiss
+    ? sideBySideAttempts[1].submittedAt - sideBySideAttempts[0].submittedAt
+    : 0;
+  // Side-by-side renders for sim ties AND near-misses.
+  const hasSideBySide = sideBySideAttempts.length >= 2 && (isSplit || isNearMiss);
 
   // On timeout, fetch a handful of words that WOULD have worked, so the
   // players see what they missed.
@@ -197,6 +211,8 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               ? `Tied round ${ctx.round} — out of time, both score`
               : isSplit
               ? `Tied round ${ctx.round} — ${ctx.hostName} and ${ctx.guestName} both score`
+              : isNearMiss
+              ? `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round ${ctx.round} by ${nearMissDiffMs} ms`
               : `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round ${ctx.round}`}
           </div>
 
@@ -207,13 +223,20 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                *  Timeout-split has no attempts → falls through to the
                *  suggestions branch below. */}
               <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 mt-2 items-start sm:items-center sm:justify-center">
-                {sideBySideAttempts.map((a) => {
+                {sideBySideAttempts.map((a, idx) => {
                   const playerName =
                     a.by === "host" ? ctx.hostName : ctx.guestName;
+                  // In a near-miss the first attempt is the winner; the
+                  // second is the loser whose submission landed in the
+                  // grace window. Dim the loser column for visual hierarchy.
+                  const isLoserInNearMiss = isNearMiss && idx === 1;
                   return (
                     <div
                       key={`${a.by}-${a.word}`}
                       className="flex flex-col items-center"
+                      style={{
+                        opacity: isLoserInNearMiss ? 0.55 : 1,
+                      }}
                     >
                       <div
                         className="flex items-center gap-2"

@@ -292,6 +292,68 @@ export async function lockPlayerLetter(opts: {
 
 type PendingAttempt = NonNullable<PersistedGameState["pendingResult"]>["attempts"][number];
 
+/**
+ * How long after a solo-winner result is committed we'll still accept the
+ * loser's submission as a "near miss" (informational only — no score
+ * change). Tuned to capture genuine "we both clicked Submit at roughly
+ * the same time but one was a touch faster" cases without indefinitely
+ * accepting late submissions into a concluded round.
+ */
+const NEAR_MISS_WINDOW_MS = 1500;
+
+/**
+ * Append a late-arriving submission to `result.attempts`. Used when the
+ * loser's `/submit` lands after `resolveRound` has already committed a
+ * solo winner, but within {@link NEAR_MISS_WINDOW_MS}. The result phase
+ * uses this to render both words side-by-side with a "won by N ms"
+ * timing diff.
+ */
+async function recordNearMiss(opts: {
+  code: string;
+  room: NonNullable<Awaited<ReturnType<typeof getRoomByCode>>>;
+  role: "host" | "guest";
+  word: string;
+  phonetic?: string;
+}): Promise<RecordAttemptResult> {
+  const { room, role } = opts;
+  const result = room.state.result;
+  if (!result || !result.attempts) {
+    return { ok: false, reason: "already_decided" };
+  }
+  const existing = result.attempts;
+  if (existing.some((a) => a.by === role)) {
+    return { ok: false, reason: "already_decided" };
+  }
+  const word = opts.word.trim().toLowerCase();
+  const newAttempts = [
+    ...existing,
+    {
+      by: role,
+      word,
+      ipa: opts.phonetic,
+      submittedAt: Date.now(),
+    },
+  ];
+  const nextState: PersistedGameState = {
+    ...room.state,
+    result: { ...result, attempts: newAttempts },
+  };
+  const admin = supabaseAdmin();
+  const { data, error } = await admin
+    .from("rooms")
+    .update({ state: nextState })
+    .eq("code", opts.code)
+    .eq("state->>phase", "result")
+    // Guard: only update if attempts is still the single-attempt array
+    // we read. Cheap optimistic concurrency — accepts losing a rare
+    // double-late submission rather than carrying lock complexity here.
+    .select("code")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { ok: false, reason: "too_late" };
+  return { ok: true, isFirst: false, role, state: nextState };
+}
+
 export type RecordAttemptResult =
   | { ok: true; isFirst: boolean; role: "host" | "guest"; state: PersistedGameState }
   | {
@@ -342,6 +404,30 @@ export async function recordAttempt(opts: {
   if (room.host_id === opts.clientId) role = "host";
   else if (room.guest_id === opts.clientId) role = "guest";
   else return { ok: false, reason: "forbidden" };
+
+  // Near-miss capture: round already resolved as a solo winner, but the
+  // loser's submission is arriving shortly after. Append it to
+  // result.attempts so the UI can show a "won by N ms" view. The
+  // append is informational only — no score change, no usedWords
+  // change, no winner change.
+  if (
+    room.state.phase === "result" &&
+    room.state.result &&
+    (room.state.result.winner === "host" || room.state.result.winner === "guest") &&
+    room.state.result.attempts?.length === 1 &&
+    room.state.result.attempts[0].by !== role
+  ) {
+    const winnerAt = room.state.result.attempts[0].submittedAt;
+    if (Date.now() - winnerAt <= NEAR_MISS_WINDOW_MS) {
+      return await recordNearMiss({
+        code: opts.code,
+        room,
+        role,
+        word,
+        phonetic: opts.phonetic,
+      });
+    }
+  }
 
   if (room.state.phase !== "race") {
     return { ok: false, reason: "wrong_phase" };
@@ -446,6 +532,17 @@ function computeFinalState(
         audio: a.audio,
         definitions: a.definitions,
         submittedAt: a.submittedAt,
+        // Seed `attempts` with the winner so a late submission from the
+        // loser (during the near-miss window) can be appended here for
+        // the "won by N ms" display.
+        attempts: [
+          {
+            by: a.by,
+            word: a.word,
+            ipa: a.phonetic,
+            submittedAt: a.submittedAt,
+          },
+        ],
       },
       usedWords: [
         ...state.usedWords,
@@ -464,11 +561,13 @@ function computeFinalState(
   const tieBehavior = state.settings.tieBehavior;
 
   // Both `split` and `replay` need the per-player attempts to render the
-  // side-by-side display, so we pre-compute that once.
+  // side-by-side display, so we pre-compute that once. `submittedAt` is
+  // carried through so the UI can show timing diffs where useful.
   const attemptsForDisplay = sorted.map((a) => ({
     by: a.by,
     word: a.word,
     ipa: a.phonetic,
+    submittedAt: a.submittedAt,
   }));
 
   if (tieBehavior === "split") {

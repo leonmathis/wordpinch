@@ -255,9 +255,10 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const focusInput = React.useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
+    // Already focused? Don't jump the caret — the user might have
+    // tapped mid-word to position it intentionally.
+    if (typeof document !== "undefined" && document.activeElement === el) return;
     el.focus();
-    // Place caret at the end so the user can keep typing without
-    // navigating around the prefilled first letter.
     const len = el.value.length;
     try {
       el.setSelectionRange(len, len);
@@ -287,31 +288,37 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
             </div>
           </div>
 
-          <form onSubmit={onSubmit} className="race-input-wrap">
-            <Input
-              ref={inputRef}
-              // autoFocus + the effect-based focus() above try to grab
-              // focus on desktop where it works without a gesture. On
-              // mobile, the wp-frame's onClick takes over (see focusInput).
-              autoFocus
-              className={`${RACE_INPUT_OVERRIDES} ${reject ? "shake flash-destructive" : ""}`}
-              value={val}
-              onChange={handle}
-              placeholder={`${A}${"_".repeat(gaps)}${B}`}
-              aria-label="Your word"
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              // readOnly (not disabled) while submitting: keeps focus on the
-              // input so the user can keep trying after a rejected word. The
-              // form submit handler guards against double-submit via
-              // `if (submitting) return`.
-              readOnly={submitting}
-            />
-            <div
-              className="race-progress"
-              style={{ width: `${((ctx.roundTimerSec || 60) > 0 ? (left / (ctx.roundTimerSec || 60)) : 0) * 100}%` }}
-            />
+          <form onSubmit={onSubmit}>
+            {/* The <label> wrapping the input is the *primary* mobile
+             *  focus mechanism: tapping anywhere on the label (the big
+             *  96px hit area, including the progress strip at the bottom)
+             *  natively focuses the inner <input>, which counts as the
+             *  user gesture iOS/Android need to open the on-screen
+             *  keyboard. The wp-frame onClick (above) is a fallback for
+             *  taps outside this area. */}
+            <label className="race-input-wrap block cursor-text">
+              <Input
+                ref={inputRef}
+                autoFocus
+                className={`${RACE_INPUT_OVERRIDES} ${reject ? "shake flash-destructive" : ""}`}
+                value={val}
+                onChange={handle}
+                placeholder={`${A}${"_".repeat(gaps)}${B}`}
+                aria-label="Your word"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                // readOnly (not disabled) while submitting: keeps focus on the
+                // input so the user can keep trying after a rejected word. The
+                // form submit handler guards against double-submit via
+                // `if (submitting) return`.
+                readOnly={submitting}
+              />
+              <div
+                className="race-progress"
+                style={{ width: `${((ctx.roundTimerSec || 60) > 0 ? (left / (ctx.roundTimerSec || 60)) : 0) * 100}%` }}
+              />
+            </label>
             <Button
               type="submit"
               disabled={submitting || val.length < ctx.minWordLength}
@@ -322,32 +329,25 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           </form>
 
           <div className="flex items-center justify-between" style={{ marginTop: 14 }}>
+            {/* LEFT — opponent indicator, always about the OTHER player.
+             *  Doesn't change when the local player submits (was a bug
+             *  to flip it: same row reading "Submitted" alongside the
+             *  opponent's avatar looked like the opponent had
+             *  submitted). */}
             <div className="t-label flex items-center" style={{ gap: 8 }}>
               <Avatar name={ctx.them.name} size={18} />
-              {/* While submitting, replace the "is typing" indicator
-               *  with explicit "Submitted — waiting for opponent" so the
-               *  player has clear feedback that the server received
-               *  their word and the result is pending. */}
-              {submitting ? (
-                <>
-                  <span>Submitted ✓ — waiting for opponent</span>
-                  <span
-                    className="wp-dot pulse-soft"
-                    style={{ background: "var(--foreground)" }}
-                  />
-                </>
-              ) : (
-                <>
-                  <span>{ctx.them.name} is typing</span>
-                  <span
-                    className="wp-dot pulse-soft"
-                    style={{ background: "var(--muted-foreground)" }}
-                  />
-                </>
-              )}
+              <span>{ctx.them.name} is typing</span>
+              <span
+                className="wp-dot pulse-soft"
+                style={{ background: "var(--muted-foreground)" }}
+              />
             </div>
+            {/* RIGHT — local-side hint. Flips to submission feedback
+             *  while waiting for the resolver. */}
             <div className="t-label">
-              min {ctx.minWordLength} letters · Enter to submit
+              {submitting
+                ? "Submitted ✓ — waiting for result"
+                : `min ${ctx.minWordLength} letters · Enter to submit`}
             </div>
           </div>
 

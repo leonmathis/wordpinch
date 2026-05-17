@@ -55,16 +55,22 @@ export type PersistedGameState = {
      */
     reason?: "timeout" | "tied_nobody" | "forfeit" | "replay_pending";
     /**
-     * Per-player attempts captured during the tie window. Populated for
-     * sim ties (split + replay_pending) so the result phase can render
-     * both words side-by-side without needing the usedWords list (which
-     * isn't written for replay_pending — those words must remain
-     * available when the round restarts).
+     * Per-player attempts captured during (and shortly after) the tie
+     * window. Populated for:
+     *  - **Sim ties** (split + replay_pending) — both submissions
+     *    within the 500 ms tie window. The result phase renders these
+     *    side-by-side.
+     *  - **Solo winners** — `[winner.attempt]` from the resolver. If
+     *    the loser submits within `NEAR_MISS_WINDOW_MS` after the solo
+     *    write, their attempt is appended here so the UI can show a
+     *    "won by N ms" near-miss view (informational only — no score
+     *    change).
      */
     attempts?: {
       by: "host" | "guest";
       word: string;
       ipa?: string;
+      submittedAt: number;
     }[];
     word?: string;
     phonetic?: string;

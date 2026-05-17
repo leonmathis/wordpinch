@@ -62,13 +62,15 @@ export type GameCtx = {
    *  special UI handling. See PersistedGameState for the canonical
    *  definition. */
   resultReason?: "timeout" | "tied_nobody" | "forfeit" | "replay_pending";
-  /** Per-player attempts captured during a sim tie. Populated for split
-   *  + replay_pending; used by the result phase to render both
-   *  submissions side-by-side. */
+  /** Per-player attempts captured during a sim tie OR appended within
+   *  the near-miss window after a solo win. Used by the result phase to
+   *  render both submissions side-by-side and (for near-miss) compute a
+   *  "won by N ms" timing diff. */
   resultAttempts?: {
     by: "host" | "guest";
     word: string;
     ipa?: string;
+    submittedAt: number;
   }[];
   /** Caller-relative: `you` is whoever the local viewer is. */
   you: Player;
