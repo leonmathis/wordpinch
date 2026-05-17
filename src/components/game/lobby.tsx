@@ -12,6 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Separator } from "@/components/ui/separator";
 import { useStoredString } from "@/lib/hooks";
 import { Share2 } from "lucide-react";
+import { toast } from "sonner";
 
 const SETTINGS_LABEL = "t-label font-mono text-[13px] text-muted-foreground tracking-[0.01em] cursor-pointer";
 
@@ -156,9 +157,7 @@ function NameEditor({
 }
 
 export function Lobby({ ctx }: { ctx: GameCtx }) {
-  const [copied, setCopied] = React.useState(false);
   const tieLabelId = React.useId();
-  const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   // Host renders settings as editable controls and owns the Start button;
   // the guest sees a read-only view and a "waiting for host" hint. Names
   // come straight from canonical ctx fields — the viewer-perspective flip
@@ -211,22 +210,13 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
     commitAudio
   );
 
-  React.useEffect(
-    () => () => {
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-    },
-    []
-  );
-
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(ctx.roomCode);
+      toast.success("Room code copied", { duration: 1500 });
     } catch {
-      /* ignore */
+      toast.error("Couldn't copy — try the share dialog");
     }
-    setCopied(true);
-    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-    copyTimeoutRef.current = setTimeout(() => setCopied(false), 1200);
   };
 
   return (
@@ -447,11 +437,6 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
           </div>
         </div>
       </div>
-      {copied && (
-        <div className="toast" role="status" aria-live="polite">
-          copied
-        </div>
-      )}
     </>
   );
 }

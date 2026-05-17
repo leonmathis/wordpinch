@@ -168,13 +168,7 @@
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes caret-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 @keyframes advance-fill { from { width: 0%; } to { width: 100%; } }
-@keyframes toast-pop {
-  0% { opacity: 0; transform: translate(-50%, 8px); }
-  15%, 80% { opacity: 1; transform: translate(-50%, 0); }
-  100% { opacity: 0; transform: translate(-50%, -4px); }
-}
 
 @layer utilities {
   /* Scene + entrance animations */
@@ -194,7 +188,6 @@
   .float-up { animation: float-up 1500ms ease-out both; }
   .count-pop { animation: count-pop 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .slide-up-in { animation: slide-up-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
-  .caret-blink { animation: caret-blink 1s steps(1) infinite; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -204,7 +197,6 @@
   .float-up,
   .count-pop,
   .slide-up-in,
-  .caret-blink,
   .pulse-soft {
     animation: none;
   }
@@ -254,7 +246,6 @@
     background: var(--foreground);
     display: inline-block;
   }
-  .wp-dot-away { background: transparent; border: 1px solid var(--muted-foreground); }
 
   .typing-dots { @apply inline-flex items-center gap-[3px]; }
   .typing-dots i {
@@ -286,17 +277,6 @@
     min-height: 48px;
     padding: 0 12px;
   }
-
-  .seg-legacy {
-    @apply inline-flex overflow-hidden border border-border;
-    border-radius: 6px;
-  }
-  .seg-legacy button {
-    @apply font-mono text-[12px] text-muted-foreground;
-    padding: 4px 10px;
-  }
-  .seg-legacy button + button { @apply border-l border-border; }
-  .seg-legacy button[data-on="true"] { background: var(--foreground); color: var(--background); }
 
   /* ── Phase: Pick ──────────────────────────────────────────────────── */
   .pick-input {
@@ -457,22 +437,10 @@
   .used-row .meta, .used-row .ipa, .used-row .by { color: var(--muted-foreground); }
 
   /* ── Overlays ─────────────────────────────────────────────────────── */
-  .spec-banner {
-    @apply absolute left-0 right-0 z-[3] font-mono text-muted-foreground text-center;
-    top: 2px;
-    padding: 8px 20px;
-    background: color-mix(in oklch, var(--foreground) 4%, transparent);
-    font-size: 13px;
-  }
-
-  .reconnect-banner {
-    @apply absolute left-0 right-0 z-[3] font-mono text-muted-foreground text-center;
-    top: 2px;
-    padding: 6px 20px;
-    background: color-mix(in oklch, var(--foreground) 3%, transparent);
-    font-size: 13px;
-    animation: slide-up-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
+  /* .spec-banner, .reconnect-banner: replaced by shadcn `Alert` (see
+   *  reconnect-banner.tsx and spectator-phase.tsx#Banner). Toast feedback
+   *  now goes through sonner; the old .toast / @keyframes toast-pop are
+   *  removed. */
 
   .url-row {
     @apply flex items-stretch overflow-hidden border border-border;
@@ -487,17 +455,4 @@
   }
   .qr i { background: var(--foreground); display: block; }
   .qr i[data-on="false"] { background: transparent; }
-
-  .toast {
-    @apply font-mono text-center absolute z-[9] pointer-events-none;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 12px;
-    background: var(--foreground);
-    color: var(--background);
-    padding: 6px 12px;
-    border-radius: 999px;
-    animation: toast-pop 1400ms ease-out both;
-  }
 }

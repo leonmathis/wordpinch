@@ -34,7 +34,10 @@ export async function POST(request: Request) {
 
   try {
     const { code } = await createRoom({ hostId, hostName: safeName });
-    return NextResponse.json({ code }, { status: 201 });
+    return NextResponse.json(
+      { code },
+      { status: 201, headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     console.error("[POST /api/rooms]", err);
     return NextResponse.json(

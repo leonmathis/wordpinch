@@ -40,7 +40,7 @@ export function ScoreHud({ used, you, them }: Props) {
           Words played · {used.length} {open ? "↑" : "↓"}
         </Button>
       </div>
-      {open && used.length > 0 && (
+      {open && used.length > 0 ? (
         <div id={panelId} className="used-list mt-3" style={{ maxHeight: 150, overflowY: "auto" }}>
           <Separator />
           {used.map((u, i) => (
@@ -56,7 +56,7 @@ export function ScoreHud({ used, you, them }: Props) {
           ))}
           <Separator />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

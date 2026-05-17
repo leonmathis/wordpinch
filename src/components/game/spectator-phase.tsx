@@ -7,13 +7,22 @@ import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
 import { LettersDisplay } from "./letters-display";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Eye } from "lucide-react";
 
 const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
 
 function Banner() {
   return (
-    <div className="spec-banner">Watching wordpinch — 2 players in game</div>
+    <div className="absolute left-0 right-0 z-[3] flex justify-center px-4 pointer-events-none" style={{ top: 12 }}>
+      <Alert className="max-w-sm backdrop-blur-sm bg-background/85 shadow-sm">
+        <Eye />
+        <AlertDescription>
+          Watching wordpinch — 2 players in game
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 }
 

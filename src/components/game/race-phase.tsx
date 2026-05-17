@@ -6,6 +6,8 @@ import { TopChrome } from "./top-chrome";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { TriangleAlert } from "lucide-react";
 import { LettersDisplay } from "./letters-display";
 import { playBuzz } from "@/lib/sound";
 
@@ -85,23 +87,13 @@ function DisconnectBanner({ opponentName }: { opponentName: string }) {
     return () => clearInterval(i);
   }, []);
   return (
-    <div
-      role="status"
-      className="font-mono"
-      style={{
-        marginBottom: 18,
-        padding: "10px 14px",
-        fontSize: 13,
-        borderRadius: "var(--radius)",
-        background: "color-mix(in oklch, var(--destructive) 12%, transparent)",
-        border: "1px solid color-mix(in oklch, var(--destructive) 35%, transparent)",
-        color: "var(--foreground)",
-        textAlign: "center",
-      }}
-    >
-      {opponentName} disconnected · forfeits in{" "}
-      <span className="tabular-nums">{secondsLeft}s</span>
-    </div>
+    <Alert variant="destructive" className="mb-4">
+      <TriangleAlert />
+      <AlertDescription className="font-mono text-[13px]">
+        {opponentName} disconnected · forfeits in{" "}
+        <span className="tabular-nums">{secondsLeft}s</span>
+      </AlertDescription>
+    </Alert>
   );
 }
 

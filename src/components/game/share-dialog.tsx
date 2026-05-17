@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useIsMounted } from "@/lib/hooks";
 import { QR } from "./qr";
+import { toast } from "sonner";
 
 type Props = {
   open: boolean;
@@ -45,6 +46,7 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
     setCopied(true);
     if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     copyTimeoutRef.current = setTimeout(() => setCopied(false), 1200);
+    toast.success("Link copied", { duration: 1500 });
   };
 
   const copy = async () => {
@@ -69,11 +71,11 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
       input.setSelectionRange(0, fullUrl.length);
       try {
         document.execCommand("copy");
+        flashCopied();
       } catch {
-        /* nothing more we can do — user can still long-press the input */
+        toast.error("Couldn't copy — long-press the URL to copy manually");
       }
       input.setAttribute("readonly", "");
-      flashCopied();
     }
   };
 

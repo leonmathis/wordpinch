@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { isValidCode, updateRoomState } from "@/lib/rooms";
 import { persistedGameStateSchema } from "@/lib/game/state-schema";
-import { broadcastRoomState } from "@/lib/realtime";
+import { broadcastRoomState } from "@/lib/realtime-server";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -73,7 +73,10 @@ export async function POST(request: Request, { params }: Params) {
     after(async () => {
       await broadcastRoomState(code, validated);
     });
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json(
+      { ok: true },
+      { status: 200, headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     console.error("[POST /api/rooms/[code]/state]", err);
     return NextResponse.json(
