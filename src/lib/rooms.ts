@@ -463,6 +463,14 @@ function computeFinalState(
   const first = sorted[0];
   const tieBehavior = state.settings.tieBehavior;
 
+  // Both `split` and `replay` need the per-player attempts to render the
+  // side-by-side display, so we pre-compute that once.
+  const attemptsForDisplay = sorted.map((a) => ({
+    by: a.by,
+    word: a.word,
+    ipa: a.phonetic,
+  }));
+
   if (tieBehavior === "split") {
     return {
       ...base,
@@ -474,6 +482,7 @@ function computeFinalState(
         audio: first.audio,
         definitions: first.definitions,
         submittedAt: first.submittedAt,
+        attempts: attemptsForDisplay,
       },
       usedWords: [
         ...state.usedWords,
@@ -503,13 +512,19 @@ function computeFinalState(
     };
   }
 
-  // "replay" — wipe pick and round-result fields, send the round back to
-  // the pick phase with the same firstPicker. Score and usedWords unchanged.
+  // "replay" — pause on a result screen so both players see what tied,
+  // then the host's client fires `replayRound` which clears pick/result
+  // and sends the round back to pick. We deliberately do *not* update
+  // usedWords or scores here; the words remain available for the retry.
   return {
     ...base,
-    phase: "pick",
-    pick: { firstPicker: state.pick.firstPicker },
-    result: undefined,
+    phase: "result",
+    result: {
+      winner: "split", // for the "both" framing in the title + delta logic
+      reason: "replay_pending",
+      submittedAt: Date.now(),
+      attempts: attemptsForDisplay,
+    },
   };
 }
 

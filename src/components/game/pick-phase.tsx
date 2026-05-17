@@ -63,6 +63,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
               >
                 <Input
                   ref={inputRef}
+                  autoFocus
                   className={PICK_INPUT_OVERRIDES}
                   maxLength={1}
                   value={val}

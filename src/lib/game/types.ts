@@ -1,6 +1,18 @@
-import type { Player, UsedWord } from "./mock";
 import type { RoomActions } from "./actions";
 import type { PersistedGameState } from "./state";
+
+/** Display shape for a player slot in the UI. Server stores only `name`
+ *  (in state.players), but the UI thinks in name+score pairs. */
+export type Player = { name: string; score: number };
+
+/** A row in the "Words played" history. `by` is the display name of the
+ *  player who won the round (or "split" for tie outcomes). */
+export type UsedWord = {
+  round: number;
+  word: string;
+  ipa: string;
+  by: string;
+};
 
 export type GamePhase =
   | "landing"
@@ -46,10 +58,18 @@ export type GameCtx = {
   definitions: Definition[];
   /** Winner of the most recently completed round. */
   winner?: "host" | "guest" | "split" | "none";
-  /** Why a round ended without a winning word. See PersistedGameState
-   *  for the canonical definition; this is the same value surfaced for
-   *  display branching in the result phase. */
-  resultReason?: "timeout" | "tied_nobody" | "forfeit";
+  /** Why a round ended without a winning word, or why the round needs
+   *  special UI handling. See PersistedGameState for the canonical
+   *  definition. */
+  resultReason?: "timeout" | "tied_nobody" | "forfeit" | "replay_pending";
+  /** Per-player attempts captured during a sim tie. Populated for split
+   *  + replay_pending; used by the result phase to render both
+   *  submissions side-by-side. */
+  resultAttempts?: {
+    by: "host" | "guest";
+    word: string;
+    ipa?: string;
+  }[];
   /** Caller-relative: `you` is whoever the local viewer is. */
   you: Player;
   them: Player;
@@ -73,7 +93,6 @@ export type GameCtx = {
   opponentOnline: boolean;
   used: UsedWord[];
   roomCode: string;
-  url: string;
   shareOpen: boolean;
   reconnectOpen: boolean;
   openShare: () => void;

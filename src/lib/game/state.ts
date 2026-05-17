@@ -36,18 +36,36 @@ export type PersistedGameState = {
   result?: {
     winner: "host" | "guest" | "split" | "none";
     /**
-     * Discriminator for results that lack a winning word.
-     *   "timeout"     — race timer expired (winner reflects tieBehavior:
-     *                   'none' for nobody, 'split' for split).
-     *   "tied_nobody" — both submitted simultaneously, tieBehavior="nobody"
-     *                   (winner: "none").
-     *   "forfeit"     — opponent stayed disconnected through the grace
-     *                   period; round awarded to the present player
-     *                   (winner: "host" | "guest", no word).
+     * Discriminator for results that lack a winning word or need
+     *   special UI handling.
+     *   "timeout"        — race timer expired (winner reflects
+     *                      tieBehavior: 'none' for nobody, 'split' for
+     *                      split).
+     *   "tied_nobody"    — both submitted simultaneously, tieBehavior="nobody"
+     *                      (winner: "none").
+     *   "forfeit"        — opponent stayed disconnected through the
+     *                      grace period; round awarded to the present
+     *                      player (winner: "host" | "guest", no word).
+     *   "replay_pending" — sim tie + tieBehavior="replay". Both words
+     *                      are shown side-by-side for a few seconds via
+     *                      `attempts` before the host's client fires
+     *                      `replayRound` and the round restarts at pick.
      * Absent for normal single-winner or sim-tie-split outcomes (which
-     * always carry a `word`).
+     * always carry a `word` and full IPA/definitions).
      */
-    reason?: "timeout" | "tied_nobody" | "forfeit";
+    reason?: "timeout" | "tied_nobody" | "forfeit" | "replay_pending";
+    /**
+     * Per-player attempts captured during the tie window. Populated for
+     * sim ties (split + replay_pending) so the result phase can render
+     * both words side-by-side without needing the usedWords list (which
+     * isn't written for replay_pending — those words must remain
+     * available when the round restarts).
+     */
+    attempts?: {
+      by: "host" | "guest";
+      word: string;
+      ipa?: string;
+    }[];
     word?: string;
     phonetic?: string;
     /** Pronunciation audio URL (Free Dictionary API), if present. */

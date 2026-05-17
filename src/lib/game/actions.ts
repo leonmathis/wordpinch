@@ -58,6 +58,12 @@ export type RoomActions = {
   timeoutRound: () => Promise<void>;
   /** Host-only. */
   nextRound: () => Promise<void>;
+  /**
+   * Host-only. Restart the *same* round at pick phase — used to close a
+   * `replay_pending` result (sim tie + tieBehavior=replay) once the
+   * "Replaying…" countdown elapses. Round number is unchanged.
+   */
+  replayRound: () => Promise<void>;
   /** Host-only. */
   rematch: () => Promise<void>;
   /**
@@ -255,6 +261,21 @@ export function useRoomActions(opts: {
           phase: "pick",
           round: state.round + 1,
           pick: { firstPicker: nextFirstPicker },
+          result: undefined,
+        });
+      },
+
+      replayRound: async () => {
+        if (!isHost || !state) return;
+        // Only valid out of a replay_pending result. Other callers would
+        // just re-roll the round needlessly.
+        if (state.result?.reason !== "replay_pending") return;
+        await postState({
+          ...state,
+          phase: "pick",
+          // Same round number + same firstPicker — the round is replaying,
+          // not advancing.
+          pick: { firstPicker: state.pick.firstPicker },
           result: undefined,
         });
       },

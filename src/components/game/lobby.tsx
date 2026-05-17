@@ -39,22 +39,26 @@ function useOptimisticSetting<T>(
 ) {
   const [local, setLocal] = React.useState(value);
   const [lastSeen, setLastSeen] = React.useState(value);
-  if (value !== lastSeen) {
+  // `pending` mirrors the existence of an in-flight debounced commit. It
+  // lives in state (not a ref) because we read it during render to gate
+  // the external-sync — `react-hooks/refs` disallows reading ref values
+  // during render.
+  const [pending, setPending] = React.useState(false);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Only sync from the broadcast when we have no pending optimistic
+  // edit. Without this gate a roundtrip broadcast for a previous click
+  // would snap the display back to that intermediate value while the
+  // user is still tapping — visible "5 → 6 → glitch back to 5 → 7"
+  // flicker. With it the user's local sequence stays smooth; once the
+  // last click's debounced commit fires and the broadcast for that
+  // value lands, `pending` is false and the sync runs (no-op visually
+  // since local already matches).
+  if (value !== lastSeen && !pending) {
     setLastSeen(value);
     setLocal(value);
   }
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // When an external value arrives mid-debounce, cancel the pending
-  // commit so a stale local edit can't land after the broadcast we just
-  // synced from and clobber it. Ref mutation lives in an effect (not
-  // during render) to satisfy `react-hooks/refs`.
-  React.useEffect(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, [value]);
   React.useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -64,8 +68,15 @@ function useOptimisticSetting<T>(
   const update = React.useCallback(
     (next: T) => {
       setLocal(next);
+      setPending(true);
       if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => commit(next), delayMs);
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        commit(next);
+        // Clear pending *after* dispatching so the next render unblocks
+        // future external syncs.
+        setPending(false);
+      }, delayMs);
     },
     [commit, delayMs]
   );

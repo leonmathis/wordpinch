@@ -4,7 +4,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import type { GameCtx, GamePhase } from "@/lib/game/types";
 import type { PersistedGameState } from "@/lib/game/state";
-import { MOCK } from "@/lib/game/mock";
+import type { UsedWord } from "@/lib/game/types";
 import { useRoomActions } from "@/lib/game/actions";
 import { useStoredBool, useClientId, useStoredString } from "@/lib/hooks";
 import { useRoomChannel } from "@/lib/use-room-channel";
@@ -100,12 +100,15 @@ export function WordpinchUI({
   // URL / internal phase. Dev phase strip can override via setLocalPhase.
   const phase: GamePhase = liveState?.phase ?? localPhase;
 
-  const round = liveState?.round
-    ?? (!roomCode ? MOCK.round : 0);
+  // On the landing page (no roomCode, phase === 'landing') there's no
+  // active match, so the round counter should be 0 — not the MOCK
+  // sample data, which was leaking through as "3 / 5" in TopChrome.
+  // MOCK still seeds the lobby's "you / them" placeholders during the
+  // design-preview-without-a-room path, just not the round counter.
+  const round = liveState?.round ?? 0;
   // settings.rounds is the source of truth; state.total is legacy / fallback.
-  const total = liveState?.settings?.rounds
-    ?? liveState?.total
-    ?? (!roomCode ? MOCK.total : 5);
+  const total =
+    liveState?.settings?.rounds ?? liveState?.total ?? (!roomCode ? 0 : 5);
   const liveSettings = liveState?.settings;
   const settings = React.useMemo(
     () =>
@@ -129,18 +132,11 @@ export function WordpinchUI({
   // letterStart = the firstPicker's letter; letterEnd = the other player's.
   // (Previously we hard-mapped hostLetter→start, which broke alternation.)
   const letterStart =
-    (firstPicker === "host" ? hostLetter : guestLetter)
-    ?? (!roomCode ? MOCK.letterStart : "");
+    (firstPicker === "host" ? hostLetter : guestLetter) ?? "";
   const letterEnd =
-    (firstPicker === "host" ? guestLetter : hostLetter)
-    ?? (!roomCode ? MOCK.letterEnd : "");
-  // Limit MOCK fallbacks to the landing-only preview. In a real room we want
-  // genuine empty state to flow through instead of MOCK leaking in.
-  const isPreviewOnly = !roomCode;
-  const resultWord = liveState?.result?.word?.toUpperCase()
-    ?? (isPreviewOnly ? MOCK.word : "");
-  const resultIpa = liveState?.result?.phonetic
-    ?? (isPreviewOnly ? MOCK.ipa : "");
+    (firstPicker === "host" ? guestLetter : hostLetter) ?? "";
+  const resultWord = liveState?.result?.word?.toUpperCase() ?? "";
+  const resultIpa = liveState?.result?.phonetic ?? "";
   const resultAudio = liveState?.result?.audio;
   const resultDefs = React.useMemo(
     () => liveState?.result?.definitions ?? [],
@@ -148,30 +144,37 @@ export function WordpinchUI({
   );
   const winner = liveState?.result?.winner;
   const resultReason = liveState?.result?.reason;
-  const hostScore = liveState?.scores?.host ?? (!roomCode ? MOCK.you.score : 0);
-  const guestScore = liveState?.scores?.guest ?? (!roomCode ? MOCK.them.score : 0);
-  const hostName = liveState?.players?.host?.name
-    ?? (!roomCode ? MOCK.you.name : "you");
-  const guestName = liveState?.players?.guest?.name
-    ?? (!roomCode ? MOCK.them.name : "guest");
+  const liveAttempts = liveState?.result?.attempts;
+  const resultAttempts = React.useMemo(
+    () => liveAttempts ?? [],
+    [liveAttempts]
+  );
+  const hostScore = liveState?.scores?.host ?? 0;
+  const guestScore = liveState?.scores?.guest ?? 0;
+  // Placeholder names when the server slot is empty / pre-state-load.
+  // Generic strings, not sample data — "you" reflects the local player on
+  // the host side, "guest" labels an unclaimed slot.
+  const hostName = liveState?.players?.host?.name ?? "you";
+  const guestName = liveState?.players?.guest?.name ?? "guest";
   // True when the server has someone in the guest slot — drives the lobby
   // empty-state ("waiting…") instead of showing a fake "guest · online"
   // pair before the second player has even opened the link.
   const guestPresent = !!liveState?.players?.guest;
   const liveUsedWords = liveState?.usedWords;
-  const usedWords = React.useMemo(
+  const usedWords = React.useMemo<UsedWord[]>(
     () =>
-      liveUsedWords && liveUsedWords.length > 0
-        ? liveUsedWords.map((u) => ({
-            round: u.round,
-            word: u.word,
-            ipa: u.ipa,
-            by: u.by === "host" ? hostName : u.by === "guest" ? guestName : "split",
-          }))
-        : !roomCode
-        ? MOCK.used
-        : [],
-    [liveUsedWords, hostName, guestName, roomCode]
+      liveUsedWords?.map((u) => ({
+        round: u.round,
+        word: u.word,
+        ipa: u.ipa,
+        by:
+          u.by === "host"
+            ? hostName
+            : u.by === "guest"
+            ? guestName
+            : "split",
+      })) ?? [],
+    [liveUsedWords, hostName, guestName]
   );
 
   const sceneKey = React.useMemo(
@@ -203,24 +206,24 @@ export function WordpinchUI({
       definitions: resultDefs,
       winner,
       resultReason,
+      resultAttempts,
       // "you" and "them" flip based on who the caller is so the score HUD
-      // and "they're typing" labels read correctly from each side. Spectators
-      // see host as "you" by convention (matches the landing/lobby seed).
+      // and "they're typing" labels read correctly from each side.
+      // Spectators see host as "you" by convention.
       you:
         role === "guest"
-          ? { ...MOCK.them, name: guestName, score: guestScore }
-          : { ...MOCK.you, name: hostName, score: hostScore },
+          ? { name: guestName, score: guestScore }
+          : { name: hostName, score: hostScore },
       them:
         role === "guest"
-          ? { ...MOCK.you, name: hostName, score: hostScore }
-          : { ...MOCK.them, name: guestName, score: guestScore },
+          ? { name: hostName, score: hostScore }
+          : { name: guestName, score: guestScore },
       hostName,
       guestName,
       guestPresent,
       opponentOnline,
       used: usedWords,
-      roomCode: roomCode ?? MOCK.roomCode,
-      url: MOCK.url,
+      roomCode: roomCode ?? "",
       shareOpen,
       reconnectOpen,
       openShare,
@@ -248,6 +251,7 @@ export function WordpinchUI({
       resultDefs,
       winner,
       resultReason,
+      resultAttempts,
       hostName,
       hostScore,
       guestName,

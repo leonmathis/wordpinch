@@ -23,7 +23,7 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
   const [copied, setCopied] = React.useState(false);
   const isMounted = useIsMounted();
   // ShareDialog is next/dynamic({ ssr: false }) — always client-side, so
-  // window.location is safe. Encoding the REAL room URL (not MOCK.url).
+  // window.location is safe.
   const fullUrl = `${window.location.origin}/r/${roomCode}`;
   const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const urlInputRef = React.useRef<HTMLInputElement>(null);

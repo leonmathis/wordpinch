@@ -72,12 +72,24 @@ export const persistedGameStateSchema = z.object({
   result: z
     .object({
       winner: z.enum(["host", "guest", "split", "none"]),
-      reason: z.enum(["timeout", "tied_nobody", "forfeit"]).optional(),
+      reason: z
+        .enum(["timeout", "tied_nobody", "forfeit", "replay_pending"])
+        .optional(),
       word: WORD.optional(),
       phonetic: PHONETIC.optional(),
       audio: z.string().max(500).optional(),
       definitions: z.array(definitionSchema).max(20).optional(),
       submittedAt: z.number().int().nonnegative().optional(),
+      attempts: z
+        .array(
+          z.object({
+            by: z.enum(["host", "guest"]),
+            word: WORD,
+            ipa: PHONETIC.optional(),
+          })
+        )
+        .max(2)
+        .optional(),
     })
     .optional(),
   raceStartedAt: z.number().int().nonnegative().optional(),

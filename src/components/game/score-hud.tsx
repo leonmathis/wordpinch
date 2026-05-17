@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { Player, UsedWord } from "@/lib/game/mock";
+import type { Player, UsedWord } from "@/lib/game/types";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 

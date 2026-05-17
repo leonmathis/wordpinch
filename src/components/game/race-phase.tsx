@@ -247,10 +247,32 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     }
   };
 
+  // Tap-anywhere-to-focus: mobile browsers refuse programmatic focus
+  // outside a user gesture, so the auto-focus useEffect above only opens
+  // the keyboard on desktop. Making the surrounding frame tappable means
+  // *any* tap (the input itself, the letters template, blank space)
+  // counts as the user gesture that opens the keyboard.
+  const focusInput = React.useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    // Place caret at the end so the user can keep typing without
+    // navigating around the prefilled first letter.
+    const len = el.value.length;
+    try {
+      el.setSelectionRange(len, len);
+    } catch {
+      /* unsupported on some virtual keyboards — non-fatal */
+    }
+  }, []);
+
   return (
     <>
       <div className="wp-body" style={{ paddingTop: 56 }}>
-        <div className="wp-frame scene">
+        <div
+          className="wp-frame scene"
+          onClick={focusInput}
+        >
           {paused ? <DisconnectBanner opponentName={ctx.them.name} /> : null}
           <div className="flex items-center justify-between" style={{ marginBottom: 22 }}>
             <LettersDisplay start={A} end={B} gaps={gaps} />
@@ -268,6 +290,10 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           <form onSubmit={onSubmit} className="race-input-wrap">
             <Input
               ref={inputRef}
+              // autoFocus + the effect-based focus() above try to grab
+              // focus on desktop where it works without a gesture. On
+              // mobile, the wp-frame's onClick takes over (see focusInput).
+              autoFocus
               className={`${RACE_INPUT_OVERRIDES} ${reject ? "shake flash-destructive" : ""}`}
               value={val}
               onChange={handle}
@@ -291,18 +317,34 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
               disabled={submitting || val.length < ctx.minWordLength}
               className="h-[38px] w-full rounded-[var(--radius)] text-[14px] font-medium mt-3"
             >
-              Submit
+              {submitting ? "Submitting…" : "Submit"}
             </Button>
           </form>
 
           <div className="flex items-center justify-between" style={{ marginTop: 14 }}>
             <div className="t-label flex items-center" style={{ gap: 8 }}>
               <Avatar name={ctx.them.name} size={18} />
-              <span>{ctx.them.name} is typing</span>
-              <span
-                className="wp-dot pulse-soft"
-                style={{ background: "var(--muted-foreground)" }}
-              />
+              {/* While submitting, replace the "is typing" indicator
+               *  with explicit "Submitted — waiting for opponent" so the
+               *  player has clear feedback that the server received
+               *  their word and the result is pending. */}
+              {submitting ? (
+                <>
+                  <span>Submitted ✓ — waiting for opponent</span>
+                  <span
+                    className="wp-dot pulse-soft"
+                    style={{ background: "var(--foreground)" }}
+                  />
+                </>
+              ) : (
+                <>
+                  <span>{ctx.them.name} is typing</span>
+                  <span
+                    className="wp-dot pulse-soft"
+                    style={{ background: "var(--muted-foreground)" }}
+                  />
+                </>
+              )}
             </div>
             <div className="t-label">
               min {ctx.minWordLength} letters · Enter to submit

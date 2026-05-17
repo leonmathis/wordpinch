@@ -54,33 +54,49 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   React.useEffect(() => {
     actionsRef.current = ctx.actions;
   });
+  // The auto-advance is shorter for replay_pending (just enough to read
+  // both attempts) and fires `replayRound` instead of `nextRound`.
+  const advanceMs = ctx.resultReason === "replay_pending" ? 4200 : 5200;
+  const fireReplay = ctx.resultReason === "replay_pending";
   React.useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
       if (cancelled) return;
       const a = actionsRef.current;
-      if (a.ready && ctx.meIsHost) void a.nextRound();
-    }, 5200);
+      if (!a.ready || !ctx.meIsHost) return;
+      if (fireReplay) void a.replayRound();
+      else void a.nextRound();
+    }, advanceMs);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [ctx.meIsHost]);
+  }, [ctx.meIsHost, advanceMs, fireReplay]);
 
-  // A round can end via five shapes:
-  //   1. Single winner   — winner = 'host' | 'guest', word + IPA + defs set
-  //   2. Sim tie (split) — winner = 'split', both submitted, both in usedWords
+  // A round can end via six shapes:
+  //   1. Single winner    — winner = 'host' | 'guest', word + IPA + defs set
+  //   2. Sim tie (split)  — winner = 'split', both submitted, both in
+  //                         usedWords, result.attempts populated
   //   3. Sim tie (nobody) — winner = 'none', reason = 'tied_nobody'
   //   4. Timeout          — reason = 'timeout', winner reflects tieBehavior
-  //                         ('none' for nobody-config, 'split' for split-config;
-  //                         replay-config goes back to pick and never lands here)
+  //                         ('none' for nobody, 'split' for split;
+  //                         replay-config goes via 'replay_pending' below)
   //   5. Forfeit          — reason = 'forfeit', winner = 'host'|'guest',
   //                         no word played (opponent stayed disconnected)
+  //   6. Replay pending   — reason = 'replay_pending', sim tie +
+  //                         tieBehavior=replay. Both words shown via
+  //                         result.attempts; host's client fires
+  //                         replayRound after the countdown.
   const isTimeout = ctx.resultReason === "timeout";
   const isForfeit = ctx.resultReason === "forfeit";
+  const isReplayPending = ctx.resultReason === "replay_pending";
   const isNone = ctx.winner === "none";
   const isSplit = ctx.winner === "split";
-  const hasWordsForRound = ctx.used.some((u) => u.round === ctx.round);
+  // For score-row +1 floats: replay_pending uses winner='split' for the
+  // "both" framing but doesn't actually award points, so exclude it.
+  const isScoredSplit = isSplit && !isReplayPending;
+  const sideBySideAttempts = ctx.resultAttempts ?? [];
+  const hasSideBySide = sideBySideAttempts.length >= 2;
 
   // On timeout, fetch a handful of words that WOULD have worked, so the
   // players see what they missed.
@@ -111,6 +127,12 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   }, [isTimeout, ctx.letterStart, ctx.letterEnd, ctx.minWordLength]);
 
   const playPronunciation = React.useCallback(() => {
+    // The global mute toggle wins over the audio-definitions setting —
+    // a muted player shouldn't hear pronunciations either. The manual
+    // play button stays clickable so the user can opt in to a single
+    // playback by clicking it (the button itself doesn't recheck mute,
+    // by design — explicit user action overrides the global mute).
+    if (ctx.muted) return;
     // 1. Prefer the dictionary API's audio file when available.
     if (ctx.audio) {
       try {
@@ -123,17 +145,24 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     }
     // 2. Fallback to the browser's SpeechSynthesis engine.
     speakFallback(ctx.word);
-  }, [ctx.audio, ctx.word]);
+  }, [ctx.audio, ctx.word, ctx.muted]);
 
   // Auto-play pronunciation when the "Audio definitions" setting is on. Tiny
   // delay so the round-win ding doesn't overlap with the pronunciation.
   React.useEffect(() => {
     if (isTimeout) return;
     if (!ctx.settings.audioDefinitions) return;
+    if (ctx.muted) return; // mute trumps audio-definitions
     if (!ctx.word) return;
     const t = setTimeout(playPronunciation, 700);
     return () => clearTimeout(t);
-  }, [isTimeout, ctx.settings.audioDefinitions, ctx.word, playPronunciation]);
+  }, [
+    isTimeout,
+    ctx.settings.audioDefinitions,
+    ctx.muted,
+    ctx.word,
+    playPronunciation,
+  ]);
 
   const word = ctx.word;
   const mid = word.slice(1, -1).toLowerCase();
@@ -156,7 +185,9 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               ctx.them flip would otherwise show the guest seeing host's
               name when *they* (the guest) win. */}
           <div className="t-label-up">
-            {isForfeit
+            {isReplayPending
+              ? `Tied round ${ctx.round} — replaying`
+              : isForfeit
               ? `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} wins round ${ctx.round} by forfeit`
               : isNone && isTimeout
               ? `Tied round ${ctx.round} — out of time, neither scores`
@@ -169,52 +200,58 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               : `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round ${ctx.round}`}
           </div>
 
-          {isSplit && hasWordsForRound ? (
+          {hasSideBySide ? (
             <>
-              {/* Sim-tie-split: both players submitted within the window,
-               *  both wrote into usedWords. Render the pair side-by-side.
-               *  (timeout-split has no words to show, so it falls through
-               *  to the suggestions branch below.) */}
+              {/* Sim tie (split or replay_pending): render both submissions
+               *  side-by-side using the attempts captured by the resolver.
+               *  Timeout-split has no attempts → falls through to the
+               *  suggestions branch below. */}
               <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 mt-2 items-start sm:items-center sm:justify-center">
-                {ctx.used
-                  .filter((u) => u.round === ctx.round)
-                  .map((u) => {
-                    const playerName =
-                      u.by === "host" ? ctx.hostName : ctx.guestName;
-                    return (
+                {sideBySideAttempts.map((a) => {
+                  const playerName =
+                    a.by === "host" ? ctx.hostName : ctx.guestName;
+                  return (
+                    <div
+                      key={`${a.by}-${a.word}`}
+                      className="flex flex-col items-center"
+                    >
                       <div
-                        key={`${u.by}-${u.word}`}
-                        className="flex flex-col items-center"
+                        className="flex items-center gap-2"
+                        style={{ marginBottom: 6 }}
                       >
-                        <div
-                          className="flex items-center gap-2"
-                          style={{ marginBottom: 6 }}
-                        >
-                          <Avatar name={playerName} size={20} />
-                          <span className="t-label-up">{playerName}</span>
-                        </div>
-                        <h2
-                          className="result-word"
-                          style={{ fontSize: 40, lineHeight: 1.1 }}
-                        >
-                          <span className="anchor">{u.word[0]}</span>
-                          <span>{u.word.slice(1, -1)}</span>
-                          <span className="anchor">
-                            {u.word[u.word.length - 1]}
-                          </span>
-                        </h2>
-                        {u.ipa ? (
-                          <span
-                            className="result-ipa"
-                            style={{ fontSize: 14, marginTop: 4 }}
-                          >
-                            {u.ipa}
-                          </span>
-                        ) : null}
+                        <Avatar name={playerName} size={20} />
+                        <span className="t-label-up">{playerName}</span>
                       </div>
-                    );
-                  })}
+                      <h2
+                        className="result-word"
+                        style={{ fontSize: 40, lineHeight: 1.1 }}
+                      >
+                        <span className="anchor">{a.word[0]}</span>
+                        <span>{a.word.slice(1, -1)}</span>
+                        <span className="anchor">
+                          {a.word[a.word.length - 1]}
+                        </span>
+                      </h2>
+                      {a.ipa ? (
+                        <span
+                          className="result-ipa"
+                          style={{ fontSize: 14, marginTop: 4 }}
+                        >
+                          {a.ipa}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
+              {isReplayPending ? (
+                <div
+                  className="t-label text-center"
+                  style={{ marginTop: 24 }}
+                >
+                  Replaying round shortly…
+                </div>
+              ) : null}
             </>
           ) : isNone && !isTimeout ? (
             // Sim-tie-nobody: both submitted, neither scored. No word to
@@ -241,9 +278,14 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Play pronunciation"
+                  aria-label={
+                    ctx.muted
+                      ? "Pronunciation muted — unmute in the top bar"
+                      : "Play pronunciation"
+                  }
                   className="h-7 w-7"
                   onClick={playPronunciation}
+                  disabled={ctx.muted}
                   type="button"
                 >
                   <Play strokeWidth={1.7} className="size-[15px]" />
@@ -307,10 +349,13 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 // reinforcing the +1 delta float.
                 const meRole: "host" | "guest" = ctx.meIsHost ? "host" : "guest";
                 const themRole: "host" | "guest" = ctx.meIsHost ? "guest" : "host";
+                // `isScoredSplit` excludes replay_pending — that case
+                // uses winner='split' for the "both" framing but does
+                // NOT award points, so we must not animate a phantom +1.
                 const youGotPoint =
-                  ctx.winner === meRole || ctx.winner === "split";
+                  ctx.winner === meRole || isScoredSplit;
                 const themGotPoint =
-                  ctx.winner === themRole || ctx.winner === "split";
+                  ctx.winner === themRole || isScoredSplit;
                 const yourPrev = ctx.you.score - (youGotPoint ? 1 : 0);
                 const theirPrev = ctx.them.score - (themGotPoint ? 1 : 0);
                 return (
