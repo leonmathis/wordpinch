@@ -72,7 +72,7 @@ export const persistedGameStateSchema = z.object({
   result: z
     .object({
       winner: z.enum(["host", "guest", "split", "none"]),
-      reason: z.enum(["timeout", "tied_nobody"]).optional(),
+      reason: z.enum(["timeout", "tied_nobody", "forfeit"]).optional(),
       word: WORD.optional(),
       phonetic: PHONETIC.optional(),
       audio: z.string().max(500).optional(),

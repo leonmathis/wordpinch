@@ -45,24 +45,42 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   // Auto-advance after the 5s advance-bar fill completes. The guest's
   // nextRound is a no-op (action is host-gated client-side too), so only
   // the host's POST drives the transition.
+  //
+  // `actionsRef` keeps the latest actions object reachable from the
+  // setTimeout callback without listing `ctx.actions` as a dep — that
+  // ref-identity changes whenever the broadcast lands, which would reset
+  // the 5s timer mid-countdown.
+  const actionsRef = React.useRef(ctx.actions);
+  React.useEffect(() => {
+    actionsRef.current = ctx.actions;
+  });
   React.useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
       if (cancelled) return;
-      if (ctx.actions.ready && ctx.meIsHost) void ctx.actions.nextRound();
+      const a = actionsRef.current;
+      if (a.ready && ctx.meIsHost) void a.nextRound();
     }, 5200);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [ctx.actions, ctx.meIsHost]);
+  }, [ctx.meIsHost]);
 
-  // "none" covers two scenarios — distinguish so the message and the
-  // "words you could have played" suggestions are only shown for an
-  // actual timeout (not a tieBehavior=nobody round).
+  // A round can end via five shapes:
+  //   1. Single winner   — winner = 'host' | 'guest', word + IPA + defs set
+  //   2. Sim tie (split) — winner = 'split', both submitted, both in usedWords
+  //   3. Sim tie (nobody) — winner = 'none', reason = 'tied_nobody'
+  //   4. Timeout          — reason = 'timeout', winner reflects tieBehavior
+  //                         ('none' for nobody-config, 'split' for split-config;
+  //                         replay-config goes back to pick and never lands here)
+  //   5. Forfeit          — reason = 'forfeit', winner = 'host'|'guest',
+  //                         no word played (opponent stayed disconnected)
+  const isTimeout = ctx.resultReason === "timeout";
+  const isForfeit = ctx.resultReason === "forfeit";
   const isNone = ctx.winner === "none";
-  const isTimeout = isNone && ctx.resultReason !== "tied_nobody";
-  const isTiedNobody = isNone && ctx.resultReason === "tied_nobody";
+  const isSplit = ctx.winner === "split";
+  const hasWordsForRound = ctx.used.some((u) => u.round === ctx.round);
 
   // On timeout, fetch a handful of words that WOULD have worked, so the
   // players see what they missed.
@@ -119,7 +137,6 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
 
   const word = ctx.word;
   const mid = word.slice(1, -1).toLowerCase();
-  const timeout = isTimeout;
   // Fallback definitions only render when we somehow lost the API result —
   // never used in normal play, but keeps the UI from showing blank.
   const FALLBACK_DEFS = [
@@ -135,34 +152,29 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     <>
       <div className="wp-body">
         <div className="wp-frame scene">
-          {timeout ? (
-            <div className="t-label-up">
-              No one won round {ctx.round} — out of time
-            </div>
-          ) : isTiedNobody ? (
-            <div className="t-label-up">
-              Tied round {ctx.round} — neither scores
-            </div>
-          ) : ctx.winner === "split" ? (
-            <div className="t-label-up">
-              Tied round {ctx.round} — {ctx.hostName} and {ctx.guestName} both
-              score
-            </div>
-          ) : (
-            <div className="t-label-up">
-              {/* Canonical names, not the viewer-perspective ctx.you/ctx.them
-                  flip — otherwise the guest sees host's name when they win. */}
-              {ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round{" "}
-              {ctx.round}
-            </div>
-          )}
+          {/* Canonical names everywhere — the viewer-perspective ctx.you /
+              ctx.them flip would otherwise show the guest seeing host's
+              name when *they* (the guest) win. */}
+          <div className="t-label-up">
+            {isForfeit
+              ? `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} wins round ${ctx.round} by forfeit`
+              : isNone && isTimeout
+              ? `Tied round ${ctx.round} — out of time, neither scores`
+              : isNone
+              ? `Tied round ${ctx.round} — neither scores`
+              : isSplit && isTimeout
+              ? `Tied round ${ctx.round} — out of time, both score`
+              : isSplit
+              ? `Tied round ${ctx.round} — ${ctx.hostName} and ${ctx.guestName} both score`
+              : `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round ${ctx.round}`}
+          </div>
 
-          {ctx.winner === "split" ? (
+          {isSplit && hasWordsForRound ? (
             <>
-              {/* Split tie: render both submitted words side-by-side. The
-               *  per-round usedWords entries carry by/word/ipa for each
-               *  attempt (computeFinalState writes both on a split), so we
-               *  filter them to this round and lay them out as a pair. */}
+              {/* Sim-tie-split: both players submitted within the window,
+               *  both wrote into usedWords. Render the pair side-by-side.
+               *  (timeout-split has no words to show, so it falls through
+               *  to the suggestions branch below.) */}
               <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 mt-2 items-start sm:items-center sm:justify-center">
                 {ctx.used
                   .filter((u) => u.round === ctx.round)
@@ -204,11 +216,17 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                   })}
               </div>
             </>
-          ) : isTiedNobody ? (
-            // Tied with tieBehavior=nobody: no winning word, no suggestions —
-            // just the title rendered above is enough.
+          ) : isNone && !isTimeout ? (
+            // Sim-tie-nobody: both submitted, neither scored. No word to
+            // show, no suggestions needed (players already tried). Title
+            // above is enough.
             null
-          ) : !isNone ? (
+          ) : isForfeit ? (
+            // Forfeit: opponent stayed disconnected through the 10s grace
+            // period. The title above (X wins round Y by forfeit) tells
+            // the whole story — no word was played, no suggestions.
+            null
+          ) : !isNone && !isSplit ? (
             <>
               <h1 className="result-word">
                 <span className="anchor">{word[0]}</span>

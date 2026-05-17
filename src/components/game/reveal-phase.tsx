@@ -8,6 +8,13 @@ import { playTick } from "@/lib/sound";
 export function RevealPhase({ ctx }: { ctx: GameCtx }) {
   const [step, setStep] = React.useState(0);
   const advanceRef = React.useRef(false);
+  // `actionsRef` keeps the latest actions reachable from the setTimeout
+  // callback without listing `ctx.actions` as a dep — that identity
+  // changes on every broadcast and would restart the countdown.
+  const actionsRef = React.useRef(ctx.actions);
+  React.useEffect(() => {
+    actionsRef.current = ctx.actions;
+  });
 
   React.useEffect(() => {
     const ts: ReturnType<typeof setTimeout>[] = [];
@@ -26,11 +33,12 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
       setTimeout(() => {
         if (advanceRef.current) return;
         advanceRef.current = true;
-        if (ctx.actions.ready && ctx.meIsHost) void ctx.actions.advanceToRace();
+        const a = actionsRef.current;
+        if (a.ready && ctx.meIsHost) void a.advanceToRace();
       }, 4200)
     );
     return () => ts.forEach(clearTimeout);
-  }, [ctx.actions, ctx.meIsHost]);
+  }, [ctx.meIsHost]);
 
   const A = ctx.letterStart;
   const B = ctx.letterEnd;

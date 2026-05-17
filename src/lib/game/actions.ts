@@ -196,6 +196,39 @@ export function useRoomActions(opts: {
         // resolver will commit the outcome shortly — don't overwrite it
         // with a 'none' timeout. The broadcast carries the resolved state.
         if (state.pendingResult) return;
+
+        // A timeout is conceptually the same as a simultaneous tie — no
+        // clear winner emerged — so we apply `tieBehavior` the same way
+        // `computeFinalState` does for a true tie. All three branches
+        // stamp `reason: "timeout"` so the result phase can label the
+        // outcome with the "out of time" suffix.
+        const tieBehavior = state.settings.tieBehavior;
+        if (tieBehavior === "replay") {
+          await postState({
+            ...state,
+            phase: "pick",
+            pick: { firstPicker: state.pick.firstPicker },
+            result: undefined,
+          });
+          return;
+        }
+        if (tieBehavior === "split") {
+          await postState({
+            ...state,
+            phase: "result",
+            result: {
+              winner: "split",
+              reason: "timeout",
+              submittedAt: Date.now(),
+            },
+            scores: {
+              host: state.scores.host + 1,
+              guest: state.scores.guest + 1,
+            },
+          });
+          return;
+        }
+        // 'nobody' (default for timeouts where no one earned the point)
         await postState({
           ...state,
           phase: "result",
@@ -256,6 +289,7 @@ export function useRoomActions(opts: {
           phase: "result",
           result: {
             winner: winningSide,
+            reason: "forfeit",
             submittedAt: Date.now(),
           },
           scores,

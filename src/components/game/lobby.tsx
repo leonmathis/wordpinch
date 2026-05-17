@@ -44,6 +44,17 @@ function useOptimisticSetting<T>(
     setLocal(value);
   }
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // When an external value arrives mid-debounce, cancel the pending
+  // commit so a stale local edit can't land after the broadcast we just
+  // synced from and clobber it. Ref mutation lives in an effect (not
+  // during render) to satisfy `react-hooks/refs`.
+  React.useEffect(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [value]);
   React.useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current);

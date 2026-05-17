@@ -46,11 +46,10 @@ export type GameCtx = {
   definitions: Definition[];
   /** Winner of the most recently completed round. */
   winner?: "host" | "guest" | "split" | "none";
-  /** Why the round had `winner: 'none'`. "timeout" = race timer expired
-   *  with no valid submission; "tied_nobody" = both submitted and the
-   *  configured tieBehavior was "nobody". Lets the UI distinguish a
-   *  "ran out of time" message from a "neither scored" message. */
-  resultReason?: "timeout" | "tied_nobody";
+  /** Why a round ended without a winning word. See PersistedGameState
+   *  for the canonical definition; this is the same value surfaced for
+   *  display branching in the result phase. */
+  resultReason?: "timeout" | "tied_nobody" | "forfeit";
   /** Caller-relative: `you` is whoever the local viewer is. */
   you: Player;
   them: Player;

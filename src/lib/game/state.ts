@@ -36,12 +36,18 @@ export type PersistedGameState = {
   result?: {
     winner: "host" | "guest" | "split" | "none";
     /**
-     * Discriminator for `winner: "none"` outcomes. "timeout" means the
-     * race timer expired with no valid submission; "tied_nobody" means
-     * both players submitted within the tie window and the configured
-     * tieBehavior was "nobody" (round ends scoreless). Absent otherwise.
+     * Discriminator for results that lack a winning word.
+     *   "timeout"     — race timer expired (winner reflects tieBehavior:
+     *                   'none' for nobody, 'split' for split).
+     *   "tied_nobody" — both submitted simultaneously, tieBehavior="nobody"
+     *                   (winner: "none").
+     *   "forfeit"     — opponent stayed disconnected through the grace
+     *                   period; round awarded to the present player
+     *                   (winner: "host" | "guest", no word).
+     * Absent for normal single-winner or sim-tie-split outcomes (which
+     * always carry a `word`).
      */
-    reason?: "timeout" | "tied_nobody";
+    reason?: "timeout" | "tied_nobody" | "forfeit";
     word?: string;
     phonetic?: string;
     /** Pronunciation audio URL (Free Dictionary API), if present. */

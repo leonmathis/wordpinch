@@ -37,7 +37,11 @@ function useRaceTimer(
   });
 
   React.useEffect(() => {
-    setTimeout(() => setLeft(total), 0);
+    // Re-seed on `total` change. The zero-delay setTimeout defers the
+    // setState past the effect body to satisfy react-hooks/set-state-in-effect;
+    // it's also cleaned up so a fast unmount within the same tick can't
+    // setState on an unmounted component.
+    const seed = setTimeout(() => setLeft(total), 0);
     let fired = false;
     const i = setInterval(() => {
       // Hold the clock while the opponent's gone — the timer resumes when
@@ -56,7 +60,10 @@ function useRaceTimer(
         return s - 1;
       });
     }, 1000);
-    return () => clearInterval(i);
+    return () => {
+      clearTimeout(seed);
+      clearInterval(i);
+    };
   }, [total]);
 
   return left;
@@ -120,11 +127,20 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     return Math.max(0, total - elapsed);
   });
 
+  // `actionsRef` keeps the latest actions reachable from callbacks
+  // without listing `ctx.actions` in deps — that identity changes on
+  // every broadcast and would otherwise restart the 10s grace timer.
+  const actionsRef = React.useRef(ctx.actions);
+  React.useEffect(() => {
+    actionsRef.current = ctx.actions;
+  });
+
   const paused = !ctx.opponentOnline;
   const left = useRaceTimer(initialLeft, paused, () => {
     // Host-gated: only the referee can declare a timeout. Guest fires the
     // same callback but no-ops; they'll receive the result via broadcast.
-    if (ctx.actions.ready && ctx.meIsHost) void ctx.actions.timeoutRound();
+    const a = actionsRef.current;
+    if (a.ready && ctx.meIsHost) void a.timeoutRound();
   });
 
   // 10 s grace period: if the opponent stays disconnected, the host's
@@ -134,15 +150,15 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   React.useEffect(() => {
     if (!ctx.meIsHost) return;
     if (ctx.opponentOnline) return;
-    if (!ctx.actions.ready) return;
     const t = setTimeout(() => {
       // Forfeit the round to the local player (host). The action itself
       // re-checks state.phase / pendingResult to avoid clobbering an
       // in-flight resolver.
-      if (ctx.actions.ready) void ctx.actions.forfeitRound("host");
+      const a = actionsRef.current;
+      if (a.ready) void a.forfeitRound("host");
     }, FORFEIT_GRACE_MS);
     return () => clearTimeout(t);
-  }, [ctx.meIsHost, ctx.opponentOnline, ctx.actions]);
+  }, [ctx.meIsHost, ctx.opponentOnline]);
   const rejectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(
