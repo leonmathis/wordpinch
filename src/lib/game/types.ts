@@ -29,6 +29,8 @@ export type GameCtx = {
   minWordLength: number;
   /** Whose turn it is to set the *first* letter this round. */
   firstPicker: "host" | "guest";
+  /** ms-epoch when the race started this round; undefined outside race phase. */
+  raceStartedAt?: number;
   /**
    * Whether the local player is the host. Phase 6: always true once we have
    * a roomCode. Phase 7 will read this from a server role-resolution call.

@@ -42,6 +42,12 @@ export type PersistedGameState = {
     definitions?: { partOfSpeech: string; definition: string; example?: string }[];
     submittedAt?: number;
   };
+  /**
+   * ms-epoch when the race phase started for the current round. Persists in
+   * the row so a refresh / rejoin computes remaining time correctly instead
+   * of starting fresh at `settings.roundTimerSec`.
+   */
+  raceStartedAt?: number;
   usedWords: {
     round: number;
     word: string;

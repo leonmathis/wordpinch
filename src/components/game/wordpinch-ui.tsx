@@ -102,6 +102,7 @@ export function WordpinchUI({
   const roundTimerSec = settings.roundTimerSec;
   const minWordLength = settings.minWordLength;
   const firstPicker = liveState?.pick?.firstPicker ?? "host";
+  const raceStartedAt = liveState?.raceStartedAt;
   const hostLetter = liveState?.pick?.hostLetter;
   const guestLetter = liveState?.pick?.guestLetter;
   // letterStart = the firstPicker's letter; letterEnd = the other player's.
@@ -166,6 +167,7 @@ export function WordpinchUI({
       roundTimerSec,
       minWordLength,
       firstPicker,
+      raceStartedAt,
       meIsHost: true, // Phase 6 single-host. Phase 7 will resolve via /api/rooms/[code]/me.
       letterStart,
       letterEnd,
@@ -197,6 +199,7 @@ export function WordpinchUI({
       roundTimerSec,
       minWordLength,
       firstPicker,
+      raceStartedAt,
       letterStart,
       letterEnd,
       resultWord,

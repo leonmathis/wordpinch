@@ -54,7 +54,19 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const [reject, setReject] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const left = useRaceTimer(ctx.roundTimerSec || 60, () => {
+
+  // Lazy useState — computed exactly once on mount. Combined with
+  // key={sceneKey} on RacePhase (in WordpinchUI), this re-derives the
+  // remaining time on every fresh entry to the race phase, including a
+  // page refresh mid-round.
+  const [initialLeft] = React.useState(() => {
+    const total = ctx.roundTimerSec || 60;
+    if (!ctx.raceStartedAt) return total;
+    const elapsed = Math.floor((Date.now() - ctx.raceStartedAt) / 1000);
+    return Math.max(0, total - elapsed);
+  });
+
+  const left = useRaceTimer(initialLeft, () => {
     if (ctx.actions.ready) void ctx.actions.timeoutRound();
   });
   const rejectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,7 +84,13 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     // react-hooks/set-state-in-effect when triggerReject is called from an effect.
     setTimeout(() => setReject(true), 0);
     playBuzz();
-    rejectTimerRef.current = setTimeout(() => setReject(false), 220);
+    rejectTimerRef.current = setTimeout(() => {
+      setReject(false);
+      // Refocus so the user can keep typing without clicking back in. The
+      // readOnly-during-submit already preserves focus on the API reject
+      // path; this catches the format-reject path and any browser quirks.
+      inputRef.current?.focus();
+    }, 220);
   }, []);
 
   React.useEffect(() => {
@@ -175,7 +193,11 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
               onChange={handle}
               placeholder={`${A}${"_".repeat(3)}${B}`}
               aria-label="Your word"
-              disabled={submitting}
+              // readOnly (not disabled) while submitting: keeps focus on the
+              // input so the user can keep trying after a rejected word. The
+              // form submit handler guards against double-submit via
+              // `if (submitting) return`.
+              readOnly={submitting}
             />
             <div
               className="race-progress"

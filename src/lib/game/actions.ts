@@ -126,7 +126,13 @@ export function useRoomActions(opts: {
       advanceToRace: async () => {
         if (!state) return;
         if (state.phase !== "reveal") return;
-        await postState({ ...state, phase: "race" });
+        // Stamp the start time so refreshed / rejoined clients can compute
+        // the correct remaining time rather than starting fresh at full.
+        await postState({
+          ...state,
+          phase: "race",
+          raceStartedAt: Date.now(),
+        });
       },
 
       submitWord: async (word, by, extras) => {
