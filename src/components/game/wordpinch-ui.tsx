@@ -65,13 +65,31 @@ export function WordpinchUI({
     name: storedName,
   });
 
-  const { state: liveState, status: channelStatus } = useRoomChannel({
+  const {
+    state: liveState,
+    status: channelStatus,
+    presence,
+    presenceReady,
+  } = useRoomChannel({
     code: channelCode,
     clientId: clientId || "00000000-0000-0000-0000-000000000000",
     name: storedName.trim() || undefined,
     role: role ?? undefined,
     initialState,
   });
+
+  // Derive opponent presence from the channel's presence sync. Default to
+  // online until the first sync arrives — `presence` is `[]` during the
+  // initial 100–500 ms subscription negotiation, which would otherwise
+  // flash the "opponent disconnected" banner. Spectators never have an
+  // opponent so the value is locked true for them.
+  const opponentRole =
+    role === "host" ? "guest" : role === "guest" ? "host" : null;
+  const opponentOnline = !opponentRole
+    ? true
+    : !presenceReady
+    ? true
+    : presence.some((m) => m.role === opponentRole);
 
   const actions = useRoomActions({
     code: channelCode,
@@ -201,6 +219,7 @@ export function WordpinchUI({
           : { ...MOCK.them, name: guestName, score: guestScore },
       hostName,
       guestName,
+      opponentOnline,
       used: usedWords,
       roomCode: roomCode ?? MOCK.roomCode,
       url: MOCK.url,
@@ -235,6 +254,7 @@ export function WordpinchUI({
       hostScore,
       guestName,
       guestScore,
+      opponentOnline,
       usedWords,
       shareOpen,
       reconnectOpen,
@@ -255,14 +275,26 @@ export function WordpinchUI({
     <div className="wp-root" data-room={ctx.roomCode}>
       {reconnectOpen ? <ReconnectBanner /> : null}
 
-      {phase === "landing" ? <Landing key={sceneKey} ctx={ctx} /> : null}
-      {phase === "lobby" ? <Lobby key={sceneKey} ctx={ctx} /> : null}
-      {phase === "pick" ? <PickPhase key={sceneKey} ctx={ctx} /> : null}
-      {phase === "reveal" ? <RevealPhase key={sceneKey} ctx={ctx} /> : null}
-      {phase === "race" ? <RacePhase key={sceneKey} ctx={ctx} /> : null}
-      {phase === "result" ? <ResultPhase key={sceneKey} ctx={ctx} /> : null}
-      {phase === "matchend" ? <MatchEnd key={sceneKey} ctx={ctx} /> : null}
-      {phase === "spectator" ? <SpectatorPhase key={sceneKey} ctx={ctx} /> : null}
+      {/* Spectator routing: any client whose role resolved to 'spectator'
+       *  sees the read-only SpectatorPhase regardless of the underlying
+       *  game phase, which switches its content based on ctx.phase. The
+       *  explicit `phase === 'spectator'` branch below is dev-only (the
+       *  phase-strip preview); in production no real room ever advances
+       *  to a phase named 'spectator'. */}
+      {role === "spectator" && phase !== "landing" ? (
+        <SpectatorPhase key={sceneKey} ctx={ctx} />
+      ) : (
+        <>
+          {phase === "landing" ? <Landing key={sceneKey} ctx={ctx} /> : null}
+          {phase === "lobby" ? <Lobby key={sceneKey} ctx={ctx} /> : null}
+          {phase === "pick" ? <PickPhase key={sceneKey} ctx={ctx} /> : null}
+          {phase === "reveal" ? <RevealPhase key={sceneKey} ctx={ctx} /> : null}
+          {phase === "race" ? <RacePhase key={sceneKey} ctx={ctx} /> : null}
+          {phase === "result" ? <ResultPhase key={sceneKey} ctx={ctx} /> : null}
+          {phase === "matchend" ? <MatchEnd key={sceneKey} ctx={ctx} /> : null}
+          {phase === "spectator" ? <SpectatorPhase key={sceneKey} ctx={ctx} /> : null}
+        </>
+      )}
 
       {showShare ? (
         <ShareDialog

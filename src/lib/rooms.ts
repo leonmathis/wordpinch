@@ -332,8 +332,10 @@ export async function lockPlayerLetter(opts: {
   return { ok: false, reason: "concurrent_update" };
 }
 
-export type SubmitWordResult =
-  | { ok: true; state: PersistedGameState }
+type PendingAttempt = NonNullable<PersistedGameState["pendingResult"]>["attempts"][number];
+
+export type RecordAttemptResult =
+  | { ok: true; isFirst: boolean; role: "host" | "guest"; state: PersistedGameState }
   | {
       ok: false;
       reason:
@@ -341,32 +343,40 @@ export type SubmitWordResult =
         | "forbidden"
         | "wrong_phase"
         | "already_decided"
-        | "concurrent_update";
+        | "too_late";
     };
 
 /**
- * Record a winning word submission. First valid submission wins the round —
- * subsequent calls see `result` already set and bail with already_decided.
+ * Records a player's submission attempt during the race phase. There are two
+ * possible outcomes:
  *
- * The optimistic-concurrency gate is `phase = 'race' AND result IS NULL` in
- * the UPDATE's WHERE. If a tied submission lands in the same millisecond and
- * both rows match, last-writer-wins on the DB; but the round broadcast
- * carries the actual winning word so the loser's client snaps to the
- * persisted state on the next broadcast. Real tie detection (within a
- * window) is a follow-up.
+ *  - **First submission of the round** — atomically claims `pendingResult`
+ *    (UPDATE gated on `pendingResult IS NULL`). The caller is told they're
+ *    first via `isFirst: true`, and must schedule the resolver
+ *    (typically via `after()` so the response can return immediately).
+ *  - **Subsequent submission within the tie window** — appends to
+ *    `pendingResult.attempts`. The resolver started by the first submitter
+ *    will see both attempts and apply the configured tieBehavior.
+ *
+ * If the round has already been resolved by the time we get here (phase has
+ * moved off 'race', or result is already set), returns `too_late` /
+ * `already_decided` — these are 409s on the wire, handled benignly by the
+ * client. The 60s timeout path coexists; if it fires first, the resolver's
+ * conditional UPDATE no-ops.
  */
-export async function submitWinningWord(opts: {
+export async function recordAttempt(opts: {
   code: string;
   clientId: string;
   word: string;
   phonetic?: string;
   audio?: string;
   definitions?: { partOfSpeech: string; definition: string; example?: string }[];
-}): Promise<SubmitWordResult> {
+}): Promise<RecordAttemptResult> {
   if (!isValidCode(opts.code)) return { ok: false, reason: "not_found" };
   const word = opts.word.trim().toLowerCase();
   if (!word) return { ok: false, reason: "forbidden" };
 
+  const admin = supabaseAdmin();
   const room = await getRoomByCode(opts.code);
   if (!room) return { ok: false, reason: "not_found" };
 
@@ -382,45 +392,201 @@ export async function submitWinningWord(opts: {
     return { ok: false, reason: "already_decided" };
   }
 
-  const scores =
-    role === "host"
-      ? { ...room.state.scores, host: room.state.scores.host + 1 }
-      : { ...room.state.scores, guest: room.state.scores.guest + 1 };
-
-  const nextState: PersistedGameState = {
-    ...room.state,
-    phase: "result",
-    result: {
-      winner: role,
-      word,
-      phonetic: opts.phonetic,
-      audio: opts.audio,
-      definitions: opts.definitions,
-      submittedAt: Date.now(),
-    },
-    usedWords: [
-      ...room.state.usedWords,
-      {
-        round: room.state.round,
-        word,
-        ipa: opts.phonetic ?? "",
-        by: role,
-      },
-    ],
-    scores,
+  const attempt: PendingAttempt = {
+    by: role,
+    word,
+    phonetic: opts.phonetic,
+    audio: opts.audio,
+    definitions: opts.definitions,
+    submittedAt: Date.now(),
   };
 
-  const admin = supabaseAdmin();
+  // First-submission path: atomic claim. Single UPDATE gated on
+  // pendingResult being null. Wins are serialized; the loser falls through.
+  if (!room.state.pendingResult) {
+    const nextState: PersistedGameState = {
+      ...room.state,
+      pendingResult: { attempts: [attempt] },
+    };
+    const { data, error } = await admin
+      .from("rooms")
+      .update({ state: nextState })
+      .eq("code", opts.code)
+      .eq("state->>phase", "race")
+      .is("state->pendingResult", null)
+      .select("code")
+      .maybeSingle();
+    if (error) throw error;
+    if (data) {
+      return { ok: true, isFirst: true, role, state: nextState };
+    }
+    // Lost the first-claim race — somebody else got there first.
+    // Fall through to the append path below with a fresh read.
+  }
+
+  // Append path: somebody (maybe us, on a retry) is already first.
+  const fresh = await getRoomByCode(opts.code);
+  if (!fresh) return { ok: false, reason: "not_found" };
+  if (fresh.state.phase !== "race") return { ok: false, reason: "too_late" };
+  if (!fresh.state.pendingResult) {
+    // Window already resolved between our two reads. Treat as too late.
+    return { ok: false, reason: "too_late" };
+  }
+  // Idempotency: if our role has already submitted (we're a retry), bail.
+  if (fresh.state.pendingResult.attempts.some((a) => a.by === role)) {
+    return { ok: false, reason: "already_decided" };
+  }
+  const newAttempts = [...fresh.state.pendingResult.attempts, attempt];
+  const nextState: PersistedGameState = {
+    ...fresh.state,
+    pendingResult: { ...fresh.state.pendingResult, attempts: newAttempts },
+  };
   const { data, error } = await admin
     .from("rooms")
     .update({ state: nextState })
     .eq("code", opts.code)
     .eq("state->>phase", "race")
-    .is("state->result", null)
     .select("code")
     .maybeSingle();
-
   if (error) throw error;
-  if (!data) return { ok: false, reason: "concurrent_update" };
-  return { ok: true, state: nextState };
+  if (!data) return { ok: false, reason: "too_late" };
+  return { ok: true, isFirst: false, role, state: nextState };
+}
+
+/**
+ * Computes the next state from the active pending attempts. Pure function —
+ * no I/O, easy to test. Called by `resolveRound` after the tie window
+ * elapses.
+ */
+function computeFinalState(
+  state: PersistedGameState,
+  attempts: PendingAttempt[]
+): PersistedGameState {
+  // Strip pendingResult on every return path so a follow-up race start
+  // doesn't see stale attempts.
+  const base = { ...state, pendingResult: undefined };
+
+  if (attempts.length === 0) {
+    return {
+      ...base,
+      phase: "result",
+      result: { winner: "none", submittedAt: Date.now() },
+    };
+  }
+
+  if (attempts.length === 1) {
+    const a = attempts[0];
+    return {
+      ...base,
+      phase: "result",
+      result: {
+        winner: a.by,
+        word: a.word,
+        phonetic: a.phonetic,
+        audio: a.audio,
+        definitions: a.definitions,
+        submittedAt: a.submittedAt,
+      },
+      usedWords: [
+        ...state.usedWords,
+        { round: state.round, word: a.word, ipa: a.phonetic ?? "", by: a.by },
+      ],
+      scores:
+        a.by === "host"
+          ? { ...state.scores, host: state.scores.host + 1 }
+          : { ...state.scores, guest: state.scores.guest + 1 },
+    };
+  }
+
+  // Tie: ≥ 2 attempts within the window. Resolve per setting.
+  const sorted = [...attempts].sort((a, b) => a.submittedAt - b.submittedAt);
+  const first = sorted[0];
+  const tieBehavior = state.settings.tieBehavior;
+
+  if (tieBehavior === "split") {
+    return {
+      ...base,
+      phase: "result",
+      result: {
+        winner: "split",
+        word: first.word,
+        phonetic: first.phonetic,
+        audio: first.audio,
+        definitions: first.definitions,
+        submittedAt: first.submittedAt,
+      },
+      usedWords: [
+        ...state.usedWords,
+        ...sorted.map((a) => ({
+          round: state.round,
+          word: a.word,
+          ipa: a.phonetic ?? "",
+          by: a.by,
+        })),
+      ],
+      scores: {
+        host: state.scores.host + 1,
+        guest: state.scores.guest + 1,
+      },
+    };
+  }
+
+  if (tieBehavior === "nobody") {
+    return {
+      ...base,
+      phase: "result",
+      result: { winner: "none", submittedAt: Date.now() },
+    };
+  }
+
+  // "replay" — wipe pick and round-result fields, send the round back to
+  // the pick phase with the same firstPicker. Score and usedWords unchanged.
+  return {
+    ...base,
+    phase: "pick",
+    pick: { firstPicker: state.pick.firstPicker },
+    result: undefined,
+  };
+}
+
+/**
+ * Reads current state and commits the resolved outcome. Called by the
+ * `/submit` route's `after()` callback after a 200ms sleep so the tie
+ * window can collect a second submission.
+ *
+ * The UPDATE is gated on `phase = 'race' AND pendingResult IS NOT NULL` so
+ * a concurrent timeout (which sets phase='result' itself) safely no-ops the
+ * resolver — first one wins, the rest see WHERE failure.
+ */
+export async function resolveRound(opts: {
+  code: string;
+}): Promise<{ state: PersistedGameState } | null> {
+  const room = await getRoomByCode(opts.code);
+  if (!room) return null;
+
+  // If the timeout (or another resolver) already handled this round,
+  // there's nothing to do.
+  if (room.state.phase !== "race" || !room.state.pendingResult) {
+    return { state: room.state };
+  }
+
+  const finalState = computeFinalState(room.state, room.state.pendingResult.attempts);
+  const admin = supabaseAdmin();
+  const { data, error } = await admin
+    .from("rooms")
+    .update({ state: finalState })
+    .eq("code", opts.code)
+    .eq("state->>phase", "race")
+    .not("state->pendingResult", "is", null)
+    .select("code")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    // Someone else (timeout or competing resolver) already wrote. Return
+    // the latest persisted state so the caller broadcasts whatever's
+    // authoritative.
+    const fresh = await getRoomByCode(opts.code);
+    return fresh ? { state: fresh.state } : null;
+  }
+  return { state: finalState };
 }

@@ -65,6 +65,12 @@ export type RoomActions = {
    * the Lobby's name editor on blur (or debounced).
    */
   renameMe: (name: string) => Promise<void>;
+  /**
+   * Host-only. Awards the round to `winningSide` and ends the race. Used
+   * by the 10 s grace-period timer when the opponent has stayed
+   * disconnected — they forfeit the round to the player who's still here.
+   */
+  forfeitRound: (winningSide: "host" | "guest") => Promise<void>;
 };
 
 /**
@@ -186,6 +192,10 @@ export function useRoomActions(opts: {
       timeoutRound: async () => {
         if (!isHost || !state) return;
         if (state.phase !== "race") return; // guard against double-fire
+        // If a submission landed inside the tie window, the server-side
+        // resolver will commit the outcome shortly — don't overwrite it
+        // with a 'none' timeout. The broadcast carries the resolved state.
+        if (state.pendingResult) return;
         await postState({
           ...state,
           phase: "result",
@@ -228,6 +238,25 @@ export function useRoomActions(opts: {
       },
 
       renameMe,
+
+      forfeitRound: async (winningSide) => {
+        if (!isHost || !state) return;
+        if (state.phase !== "race") return;
+        if (state.pendingResult) return; // resolver in flight wins
+        const scores =
+          winningSide === "host"
+            ? { ...state.scores, host: state.scores.host + 1 }
+            : { ...state.scores, guest: state.scores.guest + 1 };
+        await postState({
+          ...state,
+          phase: "result",
+          result: {
+            winner: winningSide,
+            submittedAt: Date.now(),
+          },
+          scores,
+        });
+      },
     };
   }, [state, role, postState, code, clientId]);
 }

@@ -43,6 +43,22 @@ export type PersistedGameState = {
     submittedAt?: number;
   };
   /**
+   * Active submissions during the 200ms tie window between the first
+   * submission landing and the resolver firing. Cleared by the resolver
+   * when it writes phase='result' (or 'pick' for replay tie behavior).
+   * Presence of this field implies a race resolution is imminent.
+   */
+  pendingResult?: {
+    attempts: {
+      by: "host" | "guest";
+      word: string;
+      phonetic?: string;
+      audio?: string;
+      definitions?: { partOfSpeech: string; definition: string; example?: string }[];
+      submittedAt: number;
+    }[];
+  };
+  /**
    * ms-epoch when the race phase started for the current round. Persists in
    * the row so a refresh / rejoin computes remaining time correctly instead
    * of starting fresh at `settings.roundTimerSec`.

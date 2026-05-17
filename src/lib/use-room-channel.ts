@@ -63,6 +63,14 @@ export function useRoomChannel(opts: UseRoomChannelOpts): {
   state: PersistedGameState | null;
   status: ChannelStatus;
   presence: PresenceMember[];
+  /**
+   * True once the channel has received its first presence sync. Callers
+   * that read presence to drive UI (e.g. "opponent disconnected" banner)
+   * should gate on this flag — `presence` starts as `[]` on mount and
+   * stays empty for the first ~100–500 ms while the subscription
+   * negotiates, which would otherwise look like "opponent gone".
+   */
+  presenceReady: boolean;
 } {
   const { code, clientId, name, role, initialState } = opts;
 
@@ -71,6 +79,7 @@ export function useRoomChannel(opts: UseRoomChannelOpts): {
   );
   const [status, setStatus] = React.useState<ChannelStatus>("connecting");
   const [presence, setPresence] = React.useState<PresenceMember[]>([]);
+  const [presenceReady, setPresenceReady] = React.useState(false);
 
   React.useEffect(() => {
     if (!code || !clientId) return;
@@ -119,6 +128,7 @@ export function useRoomChannel(opts: UseRoomChannelOpts): {
       }
       members.sort((a, b) => a.joinedAt - b.joinedAt);
       setPresence(members);
+      setPresenceReady(true);
     });
 
     channel.subscribe(async (s) => {
@@ -153,5 +163,5 @@ export function useRoomChannel(opts: UseRoomChannelOpts): {
     };
   }, [code, clientId, name, role]);
 
-  return { state, status, presence };
+  return { state, status, presence, presenceReady };
 }

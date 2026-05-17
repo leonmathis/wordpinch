@@ -14,21 +14,33 @@ const RACE_INPUT_OVERRIDES =
 // Hoisted: avoid re-creating the regex on every onChange / submit.
 const NON_ALPHA_REGEX = /[^A-Z]/g;
 
-function useRaceTimer(total: number, onExpire?: () => void) {
+function useRaceTimer(
+  total: number,
+  paused: boolean,
+  onExpire?: () => void
+) {
   const [left, setLeft] = React.useState(total);
   const onExpireRef = React.useRef(onExpire);
+  const pausedRef = React.useRef(paused);
 
-  // Track latest onExpire without re-running the interval each render. Setting
-  // a ref during render IS what react-hooks/refs forbids; we update inside an
-  // effect so React's commit phase has run first.
+  // Track latest values without re-running the interval each render. Refs
+  // are mutated in an effect (not during render) to keep
+  // react-hooks/refs happy.
   React.useEffect(() => {
     onExpireRef.current = onExpire;
+  });
+  React.useEffect(() => {
+    pausedRef.current = paused;
   });
 
   React.useEffect(() => {
     setTimeout(() => setLeft(total), 0);
     let fired = false;
     const i = setInterval(() => {
+      // Hold the clock while the opponent's gone — the timer resumes when
+      // presence sees them again. The 10 s grace timer runs in parallel
+      // and forfeits the round if they stay missing.
+      if (pausedRef.current) return;
       setLeft((s) => {
         if (s <= 1) {
           if (!fired) {
@@ -45,6 +57,51 @@ function useRaceTimer(total: number, onExpire?: () => void) {
   }, [total]);
 
   return left;
+}
+
+/**
+ * Grace period (ms) after the opponent disconnects before the host's client
+ * forfeits the round in favour of the player still here.
+ */
+const FORFEIT_GRACE_MS = 10_000;
+
+function DisconnectBanner({ opponentName }: { opponentName: string }) {
+  const [secondsLeft, setSecondsLeft] = React.useState(
+    Math.ceil(FORFEIT_GRACE_MS / 1000)
+  );
+  React.useEffect(() => {
+    const start = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const remaining = Math.max(
+        0,
+        Math.ceil((FORFEIT_GRACE_MS - elapsed) / 1000)
+      );
+      setSecondsLeft(remaining);
+    };
+    tick();
+    const i = setInterval(tick, 250);
+    return () => clearInterval(i);
+  }, []);
+  return (
+    <div
+      role="status"
+      className="font-mono"
+      style={{
+        marginBottom: 18,
+        padding: "10px 14px",
+        fontSize: 13,
+        borderRadius: "var(--radius)",
+        background: "color-mix(in oklch, var(--destructive) 12%, transparent)",
+        border: "1px solid color-mix(in oklch, var(--destructive) 35%, transparent)",
+        color: "var(--foreground)",
+        textAlign: "center",
+      }}
+    >
+      {opponentName} disconnected · forfeits in{" "}
+      <span className="tabular-nums">{secondsLeft}s</span>
+    </div>
+  );
 }
 
 export function RacePhase({ ctx }: { ctx: GameCtx }) {
@@ -70,11 +127,29 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     return Math.max(0, total - elapsed);
   });
 
-  const left = useRaceTimer(initialLeft, () => {
+  const paused = !ctx.opponentOnline;
+  const left = useRaceTimer(initialLeft, paused, () => {
     // Host-gated: only the referee can declare a timeout. Guest fires the
     // same callback but no-ops; they'll receive the result via broadcast.
     if (ctx.actions.ready && ctx.meIsHost) void ctx.actions.timeoutRound();
   });
+
+  // 10 s grace period: if the opponent stays disconnected, the host's
+  // client awards the round to the player still here. Guests don't run
+  // this — they're either the disappearing player (no client to fire)
+  // or they're the one still here (waiting for host's call).
+  React.useEffect(() => {
+    if (!ctx.meIsHost) return;
+    if (ctx.opponentOnline) return;
+    if (!ctx.actions.ready) return;
+    const t = setTimeout(() => {
+      // Forfeit the round to the local player (host). The action itself
+      // re-checks state.phase / pendingResult to avoid clobbering an
+      // in-flight resolver.
+      if (ctx.actions.ready) void ctx.actions.forfeitRound("host");
+    }, FORFEIT_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [ctx.meIsHost, ctx.opponentOnline, ctx.actions]);
   const rejectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(
@@ -178,6 +253,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       />
       <div className="wp-body" style={{ paddingTop: 56 }}>
         <div className="wp-frame scene">
+          {paused ? <DisconnectBanner opponentName={ctx.them.name} /> : null}
           <div className="flex items-center justify-between" style={{ marginBottom: 22 }}>
             <LettersDisplay start={A} end={B} gaps={gaps} />
             <div

@@ -1,9 +1,16 @@
 import { NextResponse, after } from "next/server";
-import { isValidCode, submitWinningWord } from "@/lib/rooms";
+import { isValidCode, recordAttempt, resolveRound } from "@/lib/rooms";
 import { broadcastRoomState } from "@/lib/realtime";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Tie-detection window: time the first submitter's resolver waits before
+ * computing the round outcome. Long enough to catch a genuinely-tied second
+ * submission, short enough that there's no noticeable round-end lag.
+ */
+const TIE_WINDOW_MS = 200;
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -14,14 +21,20 @@ type Definition = {
 };
 
 /**
- * Submit the round's winning word. Either player can call this; the role is
- * resolved server-side. First valid submission wins — the optimistic-
- * concurrency gate (`phase = 'race' AND result IS NULL`) makes subsequent
- * submissions a no-op that bails with 409 already_decided.
+ * Submit a word during the race. Either player can call this; the server
+ * resolves role from clientId.
  *
- * Validation against the dictionary still happens client-side via
- * /api/words/validate so the result.phonetic / audio / definitions are
- * passed in here rather than re-fetched server-side.
+ * Flow:
+ *  1. `recordAttempt` either claims `pendingResult` (we're the first
+ *     submitter) or appends to it (we're the second within the tie window).
+ *  2. If we're first, an `after()` callback sleeps `TIE_WINDOW_MS` and then
+ *     calls `resolveRound`, which reads whatever's accumulated and writes
+ *     the final state per `settings.tieBehavior`.
+ *  3. The broadcast of the final state happens at the end of the resolve
+ *     callback. Second submitters await that broadcast for the result.
+ *
+ * 409 responses (`too_late` / `already_decided`) are expected and handled
+ * benignly by the client — their state will catch up on the broadcast.
  */
 export async function POST(request: Request, { params }: Params) {
   const { code: raw } = await params;
@@ -74,7 +87,7 @@ export async function POST(request: Request, { params }: Params) {
     : undefined;
 
   try {
-    const result = await submitWinningWord({
+    const result = await recordAttempt({
       code,
       clientId,
       word,
@@ -91,6 +104,22 @@ export async function POST(request: Request, { params }: Params) {
           : 409;
       return NextResponse.json({ error: result.reason }, { status });
     }
+    if (result.isFirst) {
+      // Schedule the tie-window resolver. Using `after()` keeps the function
+      // alive past the response (Vercel honors this), so the 200ms sleep
+      // doesn't delay the client. The second submitter's request will land
+      // inside this window if it's a real tie.
+      after(async () => {
+        await new Promise((r) => setTimeout(r, TIE_WINDOW_MS));
+        const resolved = await resolveRound({ code });
+        if (resolved) {
+          await broadcastRoomState(code, resolved.state);
+        }
+      });
+    }
+    // Either way, broadcast the *current* state so the other client's UI
+    // can show "submitted" feedback before the resolution lands. Cheap and
+    // helps with reactivity.
     after(async () => {
       await broadcastRoomState(code, result.state);
     });

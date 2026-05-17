@@ -53,6 +53,14 @@ export type GameCtx = {
    *  role rather than viewer perspective (e.g. lobby roster). */
   hostName: string;
   guestName: string;
+  /**
+   * Presence of the opponent (the *other* player slot, not the caller).
+   * Derived from the channel's presence sync. While `false` during race
+   * phase, the timer pauses locally; if it stays false for 10 s the host's
+   * client triggers `forfeitRound`. For spectators this is always `true`
+   * (they have no opponent).
+   */
+  opponentOnline: boolean;
   used: UsedWord[];
   roomCode: string;
   url: string;
