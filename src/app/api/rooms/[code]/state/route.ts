@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { isValidCode, updateRoomState } from "@/lib/rooms";
-import type { PersistedGameState } from "@/lib/game/state";
+import { persistedGameStateSchema } from "@/lib/game/state-schema";
 import { broadcastRoomState } from "@/lib/realtime";
 
 const UUID_REGEX =
@@ -35,18 +35,28 @@ export async function POST(request: Request, { params }: Params) {
       { status: 400 }
     );
   }
-  if (!state || typeof state !== "object") {
+  // Strict schema validation: a malformed state payload would otherwise
+  // overwrite the row's jsonb and wedge the room into a shape the client
+  // code can't render. A well-behaved client never trips this; the check
+  // exists for defence in depth (and to surface schema drift early in
+  // development).
+  const parsed = persistedGameStateSchema.safeParse(state);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "state must be an object" },
+      {
+        error: "Invalid state payload",
+        issues: parsed.error.issues.slice(0, 10),
+      },
       { status: 400 }
     );
   }
+  const validated = parsed.data;
 
   try {
     const ok = await updateRoomState({
       code,
       hostId,
-      state: state as PersistedGameState,
+      state: validated,
     });
     if (!ok) {
       return NextResponse.json(
@@ -61,7 +71,7 @@ export async function POST(request: Request, { params }: Params) {
     // broadcasts are recovered on next page load / reconnect, but `after`
     // is markedly more reliable than naked `void`.
     after(async () => {
-      await broadcastRoomState(code, state as PersistedGameState);
+      await broadcastRoomState(code, validated);
     });
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {

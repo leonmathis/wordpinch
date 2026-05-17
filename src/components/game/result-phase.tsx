@@ -220,23 +220,46 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               className="flex items-center gap-4 font-mono relative"
               style={{ fontSize: 13 }}
             >
-              <span>
-                <span className="text-muted-foreground">{ctx.you.name}</span>{" "}
-                <span className="tabular-nums">{ctx.you.score}</span>
-                {showDelta && ctx.winner === "host" ? (
-                  <span
-                    className="score-delta float-up"
-                    style={{ position: "absolute", marginLeft: 6 }}
-                  >
-                    +1
-                  </span>
-                ) : null}
-              </span>
-              <span className="text-muted-foreground">·</span>
-              <span>
-                <span className="text-muted-foreground">{ctx.them.name}</span>{" "}
-                <span className="tabular-nums">{ctx.them.score}</span>
-              </span>
+              {(() => {
+                // Map the canonical winner ('host' | 'guest' | 'split' | 'none')
+                // onto caller-relative "you got a point / they got a point". Split
+                // gives both, 'none' (timeout) gives neither.
+                const meRole: "host" | "guest" = ctx.meIsHost ? "host" : "guest";
+                const themRole: "host" | "guest" = ctx.meIsHost ? "guest" : "host";
+                const youGotPoint =
+                  ctx.winner === meRole || ctx.winner === "split";
+                const themGotPoint =
+                  ctx.winner === themRole || ctx.winner === "split";
+                return (
+                  <>
+                    <span className="relative">
+                      <span className="text-muted-foreground">{ctx.you.name}</span>{" "}
+                      <span className="tabular-nums">{ctx.you.score}</span>
+                      {showDelta && youGotPoint ? (
+                        <span
+                          className="score-delta float-up"
+                          style={{ position: "absolute", marginLeft: 6 }}
+                        >
+                          +1
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="relative">
+                      <span className="text-muted-foreground">{ctx.them.name}</span>{" "}
+                      <span className="tabular-nums">{ctx.them.score}</span>
+                      {showDelta && themGotPoint ? (
+                        <span
+                          className="score-delta float-up"
+                          style={{ position: "absolute", marginLeft: 6 }}
+                        >
+                          +1
+                        </span>
+                      ) : null}
+                    </span>
+                  </>
+                );
+              })()}
             </div>
             {ctx.meIsHost ? (
               <Button

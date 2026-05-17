@@ -141,55 +141,20 @@ export async function claimGuestSlot(opts: {
   if (!isValidCode(opts.code)) return { ok: false, reason: "not_found" };
   const admin = supabaseAdmin();
 
-  const room = await getRoomByCode(opts.code);
-  if (!room) return { ok: false, reason: "not_found" };
-
-  if (room.host_id === opts.clientId) {
-    return { ok: true, role: "host", state: room.state };
-  }
-  if (room.guest_id === opts.clientId) {
-    return { ok: true, role: "guest", state: room.state };
-  }
-  if (room.guest_id !== null) {
-    return { ok: false, reason: "occupied" };
-  }
-
-  const safeName =
-    typeof opts.name === "string" && opts.name.length > 0 && opts.name.length <= 32
-      ? opts.name
-      : "guest";
-  const nextState: PersistedGameState = {
-    ...room.state,
-    players: {
-      ...room.state.players,
-      guest: { name: safeName },
-    },
-  };
-
-  // Single UPDATE gated on guest_id IS NULL — this is the atomic claim.
-  // Concurrent joiners see one winner; the others fall through to the
-  // refresh-read branch below.
-  const { data, error } = await admin
-    .from("rooms")
-    .update({ guest_id: opts.clientId, state: nextState })
-    .eq("code", opts.code)
-    .is("guest_id", null)
-    .select("code, state")
-    .maybeSingle();
-
+  // Delegates to the `claim_guest_slot` Postgres function, which holds a
+  // row lock + uses jsonb_set so a concurrent host write to `state` can't
+  // be clobbered by our claim. See migration 20260517124906_dual_auth_rpcs.
+  const { data, error } = await admin.rpc("claim_guest_slot", {
+    p_code: opts.code,
+    p_client_id: opts.clientId,
+    p_name: opts.name ?? "",
+  });
   if (error) throw error;
-
-  if (data) {
-    return { ok: true, role: "guest", state: data.state as PersistedGameState };
-  }
-
-  // Lost the race. Re-read and decide.
-  const fresh = await getRoomByCode(opts.code);
-  if (!fresh) return { ok: false, reason: "not_found" };
-  if (fresh.guest_id === opts.clientId) {
-    return { ok: true, role: "guest", state: fresh.state };
-  }
-  return { ok: false, reason: "occupied" };
+  const result = data as
+    | { ok: true; role: "host" | "guest"; state: PersistedGameState }
+    | { ok: false; reason: "not_found" | "occupied" };
+  if (!result.ok) return result;
+  return { ok: true, role: result.role, state: result.state };
 }
 
 export type RenameResult =
@@ -210,29 +175,22 @@ export async function renamePlayer(opts: {
   name: string;
 }): Promise<RenameResult> {
   if (!isValidCode(opts.code)) return { ok: false, reason: "not_found" };
-  const trimmed = opts.name.trim().slice(0, 32);
-  if (!trimmed) return { ok: false, reason: "forbidden" };
 
-  const room = await getRoomByCode(opts.code);
-  if (!room) return { ok: false, reason: "not_found" };
-
-  let role: "host" | "guest";
-  if (room.host_id === opts.clientId) role = "host";
-  else if (room.guest_id === opts.clientId) role = "guest";
-  else return { ok: false, reason: "forbidden" };
-
-  const players = role === "host"
-    ? { ...room.state.players, host: { name: trimmed } }
-    : { ...room.state.players, guest: { name: trimmed } };
-  const nextState: PersistedGameState = { ...room.state, players };
-
+  // Delegates to the `rename_player` Postgres function — same row-lock +
+  // jsonb_set pattern as claim_guest_slot. The function handles trimming,
+  // length capping, and rejects empty names.
   const admin = supabaseAdmin();
-  const { error } = await admin
-    .from("rooms")
-    .update({ state: nextState })
-    .eq("code", opts.code);
+  const { data, error } = await admin.rpc("rename_player", {
+    p_code: opts.code,
+    p_client_id: opts.clientId,
+    p_name: opts.name,
+  });
   if (error) throw error;
-  return { ok: true, state: nextState };
+  const result = data as
+    | { ok: true; state: PersistedGameState }
+    | { ok: false; reason: "not_found" | "forbidden" };
+  if (!result.ok) return { ok: false, reason: result.reason };
+  return { ok: true, state: result.state };
 }
 
 export type LockLetterResult =
