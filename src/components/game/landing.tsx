@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const CODE_REGEX = /^[A-HJ-NP-Z2-9]{4}$/;
+// Hoisted to avoid re-creating per keystroke.
+const NON_CODE_CHAR_REGEX = /[^A-HJ-NP-Z2-9]/g;
 
 export function Landing({ ctx }: { ctx: GameCtx }) {
   const router = useRouter();
@@ -103,7 +105,7 @@ export function Landing({ ctx }: { ctx: GameCtx }) {
               value={code}
               maxLength={4}
               onChange={(e) => {
-                setCode(e.target.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, ""));
+                setCode(e.target.value.toUpperCase().replace(NON_CODE_CHAR_REGEX, ""));
                 if (error) setError(null);
               }}
               aria-describedby={error ? "room-error" : undefined}

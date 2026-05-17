@@ -13,10 +13,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const rawWord =
-    body && typeof body === "object" && "word" in body
-      ? (body as { word: unknown }).word
-      : null;
+  const obj = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+  const rawWord = obj && "word" in obj ? obj.word : null;
+  const allowProperNouns =
+    obj && "allowProperNouns" in obj && typeof obj.allowProperNouns === "boolean"
+      ? obj.allowProperNouns
+      : true;
 
   if (typeof rawWord !== "string") {
     return NextResponse.json(
@@ -39,11 +41,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await validateWord(word);
+    const result = await validateWord(word, { allowProperNouns });
     return NextResponse.json(result, {
       status: 200,
-      // Validation results are stable per (word, lang); a long cache is safe.
-      headers: { "Cache-Control": "public, max-age=86400" },
+      // Validation results are stable per (word, lang, allowProperNouns); a
+      // long cache is safe. Vary on the option for correctness.
+      headers: {
+        "Cache-Control": "public, max-age=86400",
+        Vary: "Accept-Encoding",
+      },
     });
   } catch (err) {
     console.error("[POST /api/words/validate]", err);

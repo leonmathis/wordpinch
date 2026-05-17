@@ -11,6 +11,9 @@ import { playBuzz } from "@/lib/sound";
 const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
 
+// Hoisted: avoid re-creating the regex on every onChange / submit.
+const NON_ALPHA_REGEX = /[^A-Z]/g;
+
 function useRaceTimer(total: number, onExpire?: () => void) {
   const [left, setLeft] = React.useState(total);
   const onExpireRef = React.useRef(onExpire);
@@ -81,7 +84,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   }, []);
 
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const cleaned = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
+    const cleaned = e.target.value.toUpperCase().replace(NON_ALPHA_REGEX, "");
     setVal(cleaned.startsWith(A) ? cleaned : A + cleaned);
   };
 
@@ -89,12 +92,18 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     e.preventDefault();
     if (submitting) return;
     const lower = val.toLowerCase();
-    // Local format checks — short-circuit before hitting the API. Honor the
-    // minimum-word-length setting from state.settings (default 3).
+    // Local format checks — short-circuit before hitting the API. Honor:
+    //  - minimum word length (settings)
+    //  - start/end letter constraint
+    //  - no-repeat (always; reject words already used this match)
+    const alreadyUsed = ctx.used.some(
+      (u) => u.word.toLowerCase() === lower
+    );
     if (
       val.length < ctx.minWordLength ||
       !val.startsWith(A) ||
-      !val.endsWith(B)
+      !val.endsWith(B) ||
+      alreadyUsed
     ) {
       triggerReject();
       return;
@@ -104,7 +113,10 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       const res = await fetch("/api/words/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word: lower }),
+        body: JSON.stringify({
+          word: lower,
+          allowProperNouns: ctx.settings.allowProperNouns,
+        }),
       });
       const data = (await res.json()) as {
         valid?: boolean;

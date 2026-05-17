@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { isValidCode, updateRoomState } from "@/lib/rooms";
 import type { PersistedGameState } from "@/lib/game/state";
 import { broadcastRoomState } from "@/lib/realtime";
@@ -54,9 +54,15 @@ export async function POST(request: Request, { params }: Params) {
         { status: 403 }
       );
     }
-    // Fire-and-forget broadcast — DB write is the source of truth, missed
-    // broadcasts are recovered on the next page load / reconnect.
-    void broadcastRoomState(code, state as PersistedGameState);
+    // Schedule the broadcast to run AFTER the response is sent. Using
+    // next/server's `after()` (instead of fire-and-forget `void`) is the
+    // server-after-nonblocking pattern: serverless guarantees the work
+    // completes even if the request handler has already returned. Missed
+    // broadcasts are recovered on next page load / reconnect, but `after`
+    // is markedly more reliable than naked `void`.
+    after(async () => {
+      await broadcastRoomState(code, state as PersistedGameState);
+    });
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     console.error("[POST /api/rooms/[code]/state]", err);

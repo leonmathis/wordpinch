@@ -101,6 +101,16 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     speakFallback(ctx.word);
   }, [ctx.audio, ctx.word]);
 
+  // Auto-play pronunciation when the "Audio definitions" setting is on. Tiny
+  // delay so the round-win ding doesn't overlap with the pronunciation.
+  React.useEffect(() => {
+    if (isTimeout) return;
+    if (!ctx.settings.audioDefinitions) return;
+    if (!ctx.word) return;
+    const t = setTimeout(playPronunciation, 700);
+    return () => clearTimeout(t);
+  }, [isTimeout, ctx.settings.audioDefinitions, ctx.word, playPronunciation]);
+
   const word = ctx.word;
   const mid = word.slice(1, -1).toLowerCase();
   const timeout = isTimeout;

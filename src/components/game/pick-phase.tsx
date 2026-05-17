@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 const PICK_INPUT_OVERRIDES =
   "pick-input h-auto w-[110px] max-[500px]:w-[84px] rounded-none border-0 border-b bg-transparent dark:bg-transparent px-0 pt-0 pb-3 text-[72px] max-[500px]:text-[56px] md:text-[72px] focus-visible:ring-0 focus-visible:border-b-foreground";
 
+// Hoisted to module scope — fires on every keystroke.
+const NON_ALPHA_REGEX = /[^A-Z]/g;
+
 export function PickPhase({ ctx }: { ctx: GameCtx }) {
   const [locked, setLocked] = React.useState(false);
   const [val, setVal] = React.useState("");
@@ -72,7 +75,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
                   value={val}
                   onChange={(e) =>
                     setVal(
-                      e.target.value.toUpperCase().replace(/[^A-Z]/g, "")
+                      e.target.value.toUpperCase().replace(NON_ALPHA_REGEX, "")
                     )
                   }
                   aria-label="Your letter"

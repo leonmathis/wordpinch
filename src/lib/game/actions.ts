@@ -41,9 +41,16 @@ export type RoomActions = {
    */
   lockMyLetter: (letter: string) => Promise<void>;
   advanceToRace: () => Promise<void>;
+  /**
+   * Record the outcome of a round. `by` is the winner:
+   *   - "host" / "guest": that player scores +1 (or +length-bonus once that
+   *     rule lands in Phase 7)
+   *   - "split": both score +1 (tie behavior = split)
+   *   - "none": nobody scores (tie behavior = nobody / timeout)
+   */
   submitWord: (
     word: string,
-    by: "host" | "guest",
+    by: "host" | "guest" | "split" | "none",
     extras?: {
       phonetic?: string;
       audio?: string;
@@ -126,12 +133,24 @@ export function useRoomActions(opts: {
         if (!state) return;
         const trimmed = word.trim().toLowerCase();
         if (!trimmed) return;
-        const scores =
-          by === "host"
-            ? { ...state.scores, host: state.scores.host + 1 }
-            : by === "guest"
-            ? { ...state.scores, guest: state.scores.guest + 1 }
-            : state.scores;
+
+        // Scoring respects tieBehavior for split/none outcomes.
+        let scores = state.scores;
+        if (by === "host") {
+          scores = { ...state.scores, host: state.scores.host + 1 };
+        } else if (by === "guest") {
+          scores = { ...state.scores, guest: state.scores.guest + 1 };
+        } else if (by === "split") {
+          scores = {
+            host: state.scores.host + 1,
+            guest: state.scores.guest + 1,
+          };
+        }
+        // "none" — no scores change.
+
+        // For usedWords, the `by` column needs a value the type accepts.
+        const usedBy = by === "none" ? "split" : by;
+
         await postState({
           ...state,
           phase: "result",
@@ -145,7 +164,12 @@ export function useRoomActions(opts: {
           },
           usedWords: [
             ...state.usedWords,
-            { round: state.round, word: trimmed, ipa: extras?.phonetic ?? "", by },
+            {
+              round: state.round,
+              word: trimmed,
+              ipa: extras?.phonetic ?? "",
+              by: usedBy,
+            },
           ],
           scores,
         });
