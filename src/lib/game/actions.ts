@@ -36,7 +36,16 @@ export type RoomActions = {
    */
   lockMyLetter: (letter: string) => Promise<void>;
   advanceToRace: () => Promise<void>;
-  submitWord: (word: string, by: "host" | "guest", ipa?: string) => Promise<void>;
+  submitWord: (
+    word: string,
+    by: "host" | "guest",
+    extras?: {
+      phonetic?: string;
+      definitions?: { partOfSpeech: string; definition: string; example?: string }[];
+    }
+  ) => Promise<void>;
+  /** Time's up with no valid submission. Round ends with winner = 'none'. */
+  timeoutRound: () => Promise<void>;
   nextRound: () => Promise<void>;
   rematch: () => Promise<void>;
 };
@@ -99,7 +108,7 @@ export function useRoomActions(opts: {
         await postState({ ...state, phase: "race" });
       },
 
-      submitWord: async (word, by, ipa) => {
+      submitWord: async (word, by, extras) => {
         if (!state) return;
         const trimmed = word.trim().toLowerCase();
         if (!trimmed) return;
@@ -115,14 +124,25 @@ export function useRoomActions(opts: {
           result: {
             winner: by,
             word: trimmed,
-            phonetic: ipa,
+            phonetic: extras?.phonetic,
+            definitions: extras?.definitions,
             submittedAt: Date.now(),
           },
           usedWords: [
             ...state.usedWords,
-            { round: state.round, word: trimmed, ipa: ipa ?? "", by },
+            { round: state.round, word: trimmed, ipa: extras?.phonetic ?? "", by },
           ],
           scores,
+        });
+      },
+
+      timeoutRound: async () => {
+        if (!state) return;
+        if (state.phase !== "race") return; // guard against double-fire
+        await postState({
+          ...state,
+          phase: "result",
+          result: { winner: "none", submittedAt: Date.now() },
         });
       },
 

@@ -22,6 +22,17 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
 
   const word = ctx.word;
   const mid = word.slice(1, -1).toLowerCase();
+  const timeout = ctx.winner === "none";
+  // Fallback definitions only render when we somehow lost the API result —
+  // never used in normal play, but keeps the UI from showing blank.
+  const FALLBACK_DEFS = [
+    {
+      partOfSpeech: "noun",
+      definition: "No definition available.",
+      example: undefined,
+    },
+  ];
+  const defs = ctx.definitions.length > 0 ? ctx.definitions : FALLBACK_DEFS;
 
   return (
     <>
@@ -34,40 +45,52 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
       />
       <div className="wp-body">
         <div className="wp-frame scene">
-          <div className="t-label-up">
-            {ctx.you.name} won round {ctx.round}
-          </div>
-
-          <h1 className="result-word">
-            <span className="anchor">{word[0]}</span>
-            <span>{mid}</span>
-            <span className="anchor">{word[word.length - 1]}</span>
-          </h1>
-
-          <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
-            <span className="result-ipa">{ctx.ipa}</span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Play pronunciation"
-              className="h-7 w-7"
-            >
-              <Play strokeWidth={1.7} className="size-[15px]" />
-            </Button>
-          </div>
-
-          <div style={{ marginTop: 28 }}>
-            <div className="def-block">
-              <div className="def-label">noun</div>
-              <div className="def">The quality or state of being true.</div>
-              <div className="ex">&ldquo;the search for scientific truth&rdquo;</div>
+          {timeout ? (
+            <div className="t-label-up">
+              No one won round {ctx.round} — out of time
             </div>
-            <div className="def-block">
-              <div className="def-label">noun</div>
-              <div className="def">A fact or belief that is accepted as true.</div>
-              <div className="ex">&ldquo;the emergence of fundamental truths&rdquo;</div>
+          ) : (
+            <div className="t-label-up">
+              {ctx.winner === "guest" ? ctx.them.name : ctx.you.name} won round{" "}
+              {ctx.round}
             </div>
-          </div>
+          )}
+
+          {!timeout ? (
+            <>
+              <h1 className="result-word">
+                <span className="anchor">{word[0]}</span>
+                <span>{mid}</span>
+                <span className="anchor">{word[word.length - 1]}</span>
+              </h1>
+
+              {ctx.ipa ? (
+                <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
+                  <span className="result-ipa">{ctx.ipa}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Play pronunciation"
+                    className="h-7 w-7"
+                  >
+                    <Play strokeWidth={1.7} className="size-[15px]" />
+                  </Button>
+                </div>
+              ) : null}
+
+              <div style={{ marginTop: 28 }}>
+                {defs.map((d, i) => (
+                  <div key={i} className="def-block">
+                    <div className="def-label">{d.partOfSpeech || "—"}</div>
+                    <div className="def">{d.definition}</div>
+                    {d.example ? (
+                      <div className="ex">&ldquo;{d.example}&rdquo;</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
 
           <div className="flex items-center justify-between" style={{ marginTop: 28 }}>
             <div
@@ -77,14 +100,14 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               <span>
                 <span className="text-muted-foreground">{ctx.you.name}</span>{" "}
                 <span className="tabular-nums">{ctx.you.score}</span>
-                {showDelta && (
+                {showDelta && ctx.winner === "host" ? (
                   <span
                     className="score-delta float-up"
                     style={{ position: "absolute", marginLeft: 6 }}
                   >
                     +1
                   </span>
-                )}
+                ) : null}
               </span>
               <span className="text-muted-foreground">·</span>
               <span>

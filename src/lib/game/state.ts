@@ -32,6 +32,7 @@ export type PersistedGameState = {
     winner: "host" | "guest" | "split" | "none";
     word?: string;
     phonetic?: string;
+    definitions?: { partOfSpeech: string; definition: string; example?: string }[];
     submittedAt?: number;
   };
   usedWords: {
@@ -65,7 +66,7 @@ export function initialGameState({
     scores: { host: 0, guest: 0 },
     settings: {
       rounds: 5,
-      roundTimerSec: 20,
+      roundTimerSec: 60,
       minWordLength: 3,
       tieBehavior: "replay",
       allowProperNouns: false,

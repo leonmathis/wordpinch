@@ -11,15 +11,26 @@ export type GamePhase =
   | "matchend"
   | "spectator";
 
+export type Definition = {
+  partOfSpeech: string;
+  definition: string;
+  example?: string;
+};
+
 export type GameCtx = {
   phase: GamePhase;
   setPhase: (p: GamePhase) => void;
   round: number;
   total: number;
+  roundTimerSec: number;
   letterStart: string;
   letterEnd: string;
   word: string;
   ipa: string;
+  /** Definitions for the round-winning word (from validate API). */
+  definitions: Definition[];
+  /** Winner of the most recently completed round. */
+  winner?: "host" | "guest" | "split" | "none";
   you: Player;
   them: Player;
   used: UsedWord[];

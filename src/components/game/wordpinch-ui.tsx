@@ -81,10 +81,16 @@ export function WordpinchUI({
 
   const round = liveState?.round || MOCK.round;
   const total = liveState?.total || MOCK.total;
+  const roundTimerSec = liveState?.settings?.roundTimerSec || 60;
   const letterStart = liveState?.pick?.hostLetter || MOCK.letterStart;
   const letterEnd = liveState?.pick?.guestLetter || MOCK.letterEnd;
   const resultWord = liveState?.result?.word?.toUpperCase() || MOCK.word;
   const resultIpa = liveState?.result?.phonetic || MOCK.ipa;
+  const resultDefs = React.useMemo(
+    () => liveState?.result?.definitions ?? [],
+    [liveState?.result?.definitions]
+  );
+  const winner = liveState?.result?.winner;
   const hostScore = liveState?.scores?.host ?? MOCK.you.score;
   const guestScore = liveState?.scores?.guest ?? MOCK.them.score;
   const hostName = liveState?.players?.host?.name || MOCK.you.name;
@@ -113,10 +119,13 @@ export function WordpinchUI({
       setPhase: setLocalPhase,
       round,
       total,
+      roundTimerSec,
       letterStart,
       letterEnd,
       word: resultWord,
       ipa: resultIpa,
+      definitions: resultDefs,
+      winner,
       you: { ...MOCK.you, name: hostName, score: hostScore },
       them: { ...MOCK.them, name: guestName, score: guestScore },
       used: usedWords,
@@ -136,10 +145,13 @@ export function WordpinchUI({
       phase,
       round,
       total,
+      roundTimerSec,
       letterStart,
       letterEnd,
       resultWord,
       resultIpa,
+      resultDefs,
+      winner,
       hostName,
       hostScore,
       guestName,

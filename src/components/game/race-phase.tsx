@@ -11,15 +11,36 @@ import { playBuzz } from "@/lib/sound";
 const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
 
-function useRaceTimer(total = 20) {
+function useRaceTimer(total: number, onExpire?: () => void) {
   const [left, setLeft] = React.useState(total);
+  const onExpireRef = React.useRef(onExpire);
+
+  // Track latest onExpire without re-running the interval each render. Setting
+  // a ref during render IS what react-hooks/refs forbids; we update inside an
+  // effect so React's commit phase has run first.
   React.useEffect(() => {
-    const i = setInterval(
-      () => setLeft((s) => (s > 0 ? s - 1 : 0)),
-      1000
-    );
+    onExpireRef.current = onExpire;
+  });
+
+  React.useEffect(() => {
+    setTimeout(() => setLeft(total), 0);
+    let fired = false;
+    const i = setInterval(() => {
+      setLeft((s) => {
+        if (s <= 1) {
+          if (!fired) {
+            fired = true;
+            clearInterval(i);
+            onExpireRef.current?.();
+          }
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
     return () => clearInterval(i);
-  }, []);
+  }, [total]);
+
   return left;
 }
 
@@ -30,7 +51,9 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const [reject, setReject] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const left = useRaceTimer(20);
+  const left = useRaceTimer(ctx.roundTimerSec || 60, () => {
+    if (ctx.actions.ready) void ctx.actions.timeoutRound();
+  });
   const rejectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(
@@ -83,13 +106,17 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       const data = (await res.json()) as {
         valid?: boolean;
         phonetic?: string;
+        definitions?: { partOfSpeech: string; definition: string; example?: string }[];
       };
       if (!data.valid) {
         triggerReject();
         return;
       }
       if (ctx.actions.ready) {
-        await ctx.actions.submitWord(lower, "host", data.phonetic);
+        await ctx.actions.submitWord(lower, "host", {
+          phonetic: data.phonetic,
+          definitions: data.definitions,
+        });
       }
     } catch (err) {
       console.warn("[race] validation request failed", err);
@@ -135,7 +162,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
             />
             <div
               className="race-progress"
-              style={{ width: `${(left / 20) * 100}%` }}
+              style={{ width: `${((ctx.roundTimerSec || 60) > 0 ? (left / (ctx.roundTimerSec || 60)) : 0) * 100}%` }}
             />
           </form>
 
