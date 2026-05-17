@@ -27,17 +27,19 @@ export async function GET(request: Request) {
 
   try {
     const set = await getWordlist();
-    // Iterate the Set once; cheap because we early-exit at MAX_SUGGESTIONS.
-    // Prefer shorter / more common-looking words by length bias.
+    // Single O(n) scan over the ~173K-word ENABLE set; well under 50ms in V8
+    // and the route is 24h-cached. We can't early-exit here because we want
+    // the *longest* matches across the whole list, not just the first few.
     const matches: string[] = [];
     for (const w of set) {
       if (w.length < min) continue;
       if (w[0] !== start) continue;
       if (w[w.length - 1] !== end) continue;
       matches.push(w);
-      if (matches.length >= MAX_SUGGESTIONS * 4) break; // gather then trim
     }
-    matches.sort((a, b) => a.length - b.length || a.localeCompare(b));
+    // Longest first, alphabetical to break ties — gives the "wow, look at
+    // what you could have played" feel for the timeout suggestions panel.
+    matches.sort((a, b) => b.length - a.length || a.localeCompare(b));
     const suggestions = matches.slice(0, MAX_SUGGESTIONS);
     return NextResponse.json(
       { start, end, min, suggestions },
