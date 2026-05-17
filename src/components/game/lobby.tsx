@@ -3,7 +3,6 @@
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
 import type { PersistedGameState } from "@/lib/game/state";
-import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -13,6 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { useStoredString } from "@/lib/hooks";
 import { Share2 } from "lucide-react";
 import { toast } from "sonner";
+import { Avatar } from "./avatar";
+import { motion } from "motion/react";
 
 const SETTINGS_LABEL = "t-label font-mono text-[13px] text-muted-foreground tracking-[0.01em] cursor-pointer";
 
@@ -221,12 +222,6 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
 
   return (
     <>
-      <TopChrome
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        onShare={ctx.openShare}
-      />
       <div className="wp-body">
         <div className="wp-frame scene">
           <div className="flex items-center justify-between">
@@ -236,7 +231,36 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               title="click to copy"
               className="room-code h-auto p-0 hover:bg-transparent"
             >
-              {ctx.roomCode}
+              {/* Per-character stagger so the code feels like it just got
+               *  pulled out of a hat. Single animation, no layout shift —
+               *  motion.span uses inline-block to honour the y-transform. */}
+              <motion.span
+                aria-label={ctx.roomCode}
+                initial="initial"
+                animate="animate"
+                variants={{
+                  initial: {},
+                  animate: { transition: { staggerChildren: 0.06 } },
+                }}
+              >
+                {ctx.roomCode.split("").map((c, i) => (
+                  <motion.span
+                    key={`${ctx.roomCode}-${i}`}
+                    aria-hidden
+                    variants={{
+                      initial: { opacity: 0, y: 8, scale: 0.85 },
+                      animate: { opacity: 1, y: 0, scale: 1 },
+                    }}
+                    transition={{
+                      duration: 0.42,
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                    style={{ display: "inline-block" }}
+                  >
+                    {c}
+                  </motion.span>
+                ))}
+              </motion.span>
             </Button>
             <Button
               variant="ghost"
@@ -257,7 +281,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               <Separator />
               <div className="players-row">
                 <div className="flex items-center gap-3">
-                  <span className="wp-dot" aria-hidden />
+                  <Avatar name={hostName} />
                   {isHost ? (
                     <NameEditor
                       key={hostName}
@@ -278,22 +302,35 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               <Separator />
               <div className="players-row">
                 <div className="flex items-center gap-3">
-                  <span className="wp-dot" aria-hidden />
-                  {!isHost ? (
+                  {ctx.guestPresent ? (
+                    <Avatar name={guestName} />
+                  ) : (
+                    <Avatar
+                      name="?"
+                      dim
+                      className="!bg-transparent border border-dashed border-border !text-muted-foreground"
+                    />
+                  )}
+                  {ctx.guestPresent && !isHost ? (
                     <NameEditor
                       key={guestName}
                       initialName={guestName}
                       onSave={handleRename}
                     />
                   ) : (
-                    <span>{guestName}</span>
+                    <span className={ctx.guestPresent ? undefined : "text-muted-foreground italic"}>
+                      {ctx.guestPresent ? guestName : "Waiting for player…"}
+                    </span>
                   )}
-                  {!isHost ? (
+                  {ctx.guestPresent && !isHost ? (
                     <span className="t-label">(you)</span>
                   ) : null}
                 </div>
-                <span className="font-mono text-muted-foreground" style={{ fontSize: 12 }}>
-                  online
+                <span
+                  className="font-mono text-muted-foreground"
+                  style={{ fontSize: 12 }}
+                >
+                  {ctx.guestPresent ? "online" : "—"}
                 </span>
               </div>
               <Separator />
@@ -420,7 +457,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
           <Button
             className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             style={{ marginTop: 32 }}
-            disabled={!isHost}
+            disabled={!isHost || !ctx.guestPresent}
             onClick={() => {
               if (!isHost) return;
               if (ctx.actions.ready) {
@@ -430,10 +467,18 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               }
             }}
           >
-            {isHost ? "Start game" : "Waiting for host…"}
+            {!isHost
+              ? "Waiting for host…"
+              : ctx.guestPresent
+              ? "Start game"
+              : "Waiting for player…"}
           </Button>
           <div className="t-label text-center" style={{ marginTop: 12 }}>
-            {isHost ? "2 of 2 ready" : "Host will start the match"}
+            {!isHost
+              ? "Host will start the match"
+              : ctx.guestPresent
+              ? "2 of 2 ready"
+              : "1 of 2 ready · share the room code"}
           </div>
         </div>
       </div>

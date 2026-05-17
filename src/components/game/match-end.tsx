@@ -4,27 +4,50 @@ import * as React from "react";
 import { Fragment } from "react";
 import { useRouter } from "next/navigation";
 import type { GameCtx } from "@/lib/game/types";
-import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Avatar } from "./avatar";
 import { playChime } from "@/lib/sound";
+import confetti from "canvas-confetti";
 
 export function MatchEnd({ ctx }: { ctx: GameCtx }) {
   const router = useRouter();
+  const youWon = ctx.you.score > ctx.them.score;
+  const tied = ctx.you.score === ctx.them.score;
+
   React.useEffect(() => {
     playChime();
-  }, []);
-  const youWon = ctx.you.score > ctx.them.score;
+    // Confetti only for the local winner. Tied matches and losing-side
+    // viewers get the chime + scoreboard but no party (avoids the
+    // condescending "consolation confetti" pattern). Reduced-motion
+    // viewers also opt out.
+    if (tied || !youWon) return;
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+    const burst = (origin: { x: number; y: number }, delay: number) => {
+      const t = setTimeout(() => {
+        confetti({
+          particleCount: 90,
+          spread: 70,
+          startVelocity: 38,
+          origin,
+          ticks: 140,
+        });
+      }, delay);
+      return t;
+    };
+    const t1 = burst({ x: 0.2, y: 0.7 }, 100);
+    const t2 = burst({ x: 0.8, y: 0.7 }, 350);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [tied, youWon]);
 
   return (
     <>
-      <TopChrome
-        round={ctx.total}
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        onShare={ctx.openShare}
-      />
       <div className="wp-body">
         <div className="wp-frame scene">
           <div className="t-label-up">Match</div>
@@ -38,7 +61,11 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               marginTop: 6,
             }}
           >
-            {youWon ? `${ctx.you.name} wins` : `${ctx.them.name} wins`}{" "}
+            {tied
+              ? "Tied match"
+              : youWon
+              ? `${ctx.you.name} wins`
+              : `${ctx.them.name} wins`}{" "}
             <span className="text-muted-foreground">
               {ctx.you.score}–{ctx.them.score}
             </span>
@@ -46,17 +73,23 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
 
           <div style={{ marginTop: 24 }}>
             <Separator />
-            <div className="scoreboard-row" data-winner={youWon ? "true" : "false"}>
+            <div
+              className="scoreboard-row"
+              data-winner={!tied && youWon ? "true" : "false"}
+            >
               <div className="flex items-center" style={{ gap: 10 }}>
-                <span className="wp-dot" aria-hidden />
+                <Avatar name={ctx.you.name} />
                 <span>{ctx.you.name}</span>
               </div>
               <span className="font-mono tabular-nums">{ctx.you.score}</span>
             </div>
             <Separator />
-            <div className="scoreboard-row" data-winner={!youWon ? "true" : "false"}>
+            <div
+              className="scoreboard-row"
+              data-winner={!tied && !youWon ? "true" : "false"}
+            >
               <div className="flex items-center" style={{ gap: 10 }}>
-                <span className="wp-dot" aria-hidden />
+                <Avatar name={ctx.them.name} />
                 <span>{ctx.them.name}</span>
               </div>
               <span className="font-mono tabular-nums">{ctx.them.score}</span>
@@ -68,14 +101,19 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
             <div className="t-label-up" style={{ marginBottom: 8 }}>
               Words played
             </div>
-            <div className="used-list">
+            <div>
               <Separator />
+              {/* Key combines round + by + word so split rounds (which write
+               *  two usedWords entries per round, one per submitter) don't
+               *  collide on `round` alone. */}
               {ctx.used.map((u, i) => (
-                <Fragment key={u.round}>
+                <Fragment key={`${u.round}-${u.by}-${u.word}`}>
                   <div className="used-row">
-                    <span className="meta">Rd {u.round}</span>
-                    <span className="word">{u.word}</span>
-                    <span className="ipa">{u.ipa}</span>
+                    <div className="flex items-baseline gap-3 min-w-0">
+                      <span className="meta">Rd {u.round}</span>
+                      <span className="word truncate">{u.word}</span>
+                      <span className="ipa">{u.ipa}</span>
+                    </div>
                     <span className="by">won by {u.by}</span>
                   </div>
                   {i < ctx.used.length - 1 ? <Separator /> : null}

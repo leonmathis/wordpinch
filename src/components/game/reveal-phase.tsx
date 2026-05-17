@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
-import { TopChrome } from "./top-chrome";
 import { LettersDisplay } from "./letters-display";
 import { playTick } from "@/lib/sound";
 
@@ -39,13 +38,6 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
 
   return (
     <>
-      <TopChrome
-        round={ctx.round}
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        onShare={ctx.openShare}
-      />
       <div className="wp-body">
         <div
           className="wp-frame"

@@ -2,13 +2,13 @@
 
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
-import { TopChrome } from "./top-chrome";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TriangleAlert } from "lucide-react";
 import { LettersDisplay } from "./letters-display";
+import { Avatar } from "./avatar";
 import { playBuzz } from "@/lib/sound";
 
 const RACE_INPUT_OVERRIDES =
@@ -233,13 +233,6 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
 
   return (
     <>
-      <TopChrome
-        round={ctx.round}
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        onShare={ctx.openShare}
-      />
       <div className="wp-body" style={{ paddingTop: 56 }}>
         <div className="wp-frame scene">
           {paused ? <DisconnectBanner opponentName={ctx.them.name} /> : null}
@@ -288,11 +281,12 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
 
           <div className="flex items-center justify-between" style={{ marginTop: 14 }}>
             <div className="t-label flex items-center" style={{ gap: 8 }}>
+              <Avatar name={ctx.them.name} size={18} />
+              <span>{ctx.them.name} is typing</span>
               <span
                 className="wp-dot pulse-soft"
                 style={{ background: "var(--muted-foreground)" }}
               />
-              <span>{ctx.them.name} is typing</span>
             </div>
             <div className="t-label">
               min {ctx.minWordLength} letters · Enter to submit

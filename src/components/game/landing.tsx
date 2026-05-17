@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { GameCtx } from "@/lib/game/types";
 import { useClientId, useIsMounted, useStoredString } from "@/lib/hooks";
-import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +11,7 @@ const CODE_REGEX = /^[A-HJ-NP-Z2-9]{4}$/;
 // Hoisted to avoid re-creating per keystroke.
 const NON_CODE_CHAR_REGEX = /[^A-HJ-NP-Z2-9]/g;
 
-export function Landing({ ctx }: { ctx: GameCtx }) {
+export function Landing() {
   const router = useRouter();
   const clientId = useClientId();
   const isMounted = useIsMounted();
@@ -73,12 +71,6 @@ export function Landing({ ctx }: { ctx: GameCtx }) {
 
   return (
     <>
-      <TopChrome
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        showShare={false}
-      />
       <div className="wp-body">
         <div className="wp-frame scene">
           <p

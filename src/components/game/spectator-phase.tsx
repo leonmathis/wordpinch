@@ -2,13 +2,13 @@
 
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
-import { TopChrome } from "./top-chrome";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
 import { LettersDisplay } from "./letters-display";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye } from "lucide-react";
+import { Avatar } from "./avatar";
 
 const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
@@ -63,13 +63,29 @@ function SpectatorLobby({ ctx }: { ctx: GameCtx }) {
       </div>
       <Separator />
       <div className="players-row">
-        <span>
-          {ctx.hostName} <span className="t-label">(host)</span>
-        </span>
+        <div className="flex items-center gap-3">
+          <Avatar name={ctx.hostName} />
+          <span>
+            {ctx.hostName} <span className="t-label">(host)</span>
+          </span>
+        </div>
       </div>
       <Separator />
       <div className="players-row">
-        <span>{ctx.guestName}</span>
+        <div className="flex items-center gap-3">
+          {ctx.guestPresent ? (
+            <Avatar name={ctx.guestName} />
+          ) : (
+            <Avatar
+              name="?"
+              dim
+              className="!bg-transparent border border-dashed border-border !text-muted-foreground"
+            />
+          )}
+          <span className={ctx.guestPresent ? undefined : "text-muted-foreground italic"}>
+            {ctx.guestPresent ? ctx.guestName : "Waiting for player…"}
+          </span>
+        </div>
       </div>
       <Separator />
       <div
@@ -177,18 +193,20 @@ function SpectatorRace({ ctx }: { ctx: GameCtx }) {
         style={{ marginTop: 14 }}
       >
         <div className="t-label flex items-center" style={{ gap: 8 }}>
+          <Avatar name={ctx.hostName} size={18} />
+          <span>{ctx.hostName} typing</span>
           <span
             className="wp-dot pulse-soft"
             style={{ background: "var(--muted-foreground)" }}
           />
-          <span>{ctx.hostName} typing</span>
         </div>
         <div className="t-label flex items-center" style={{ gap: 8 }}>
-          <span>{ctx.guestName} typing</span>
           <span
             className="wp-dot pulse-soft"
             style={{ background: "var(--muted-foreground)" }}
           />
+          <span>{ctx.guestName} typing</span>
+          <Avatar name={ctx.guestName} size={18} />
         </div>
       </div>
 
@@ -271,14 +289,6 @@ function SpectatorMatchEnd({ ctx }: { ctx: GameCtx }) {
 export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
   return (
     <>
-      <TopChrome
-        round={ctx.round}
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        onShare={ctx.openShare}
-        showBrand={false}
-      />
       <Banner />
       <div className="wp-body" style={{ paddingTop: 76 }}>
         {ctx.phase === "lobby" ? <SpectatorLobby ctx={ctx} /> : null}

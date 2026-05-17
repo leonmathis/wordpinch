@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
-import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Play, ArrowRight } from "lucide-react";
 import { playDing } from "@/lib/sound";
+import { CountUp } from "./count-up";
+import { Avatar } from "./avatar";
 
 type SuggestResponse = {
   suggestions: string[];
@@ -56,7 +57,12 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     };
   }, [ctx.actions, ctx.meIsHost]);
 
-  const isTimeout = ctx.winner === "none";
+  // "none" covers two scenarios — distinguish so the message and the
+  // "words you could have played" suggestions are only shown for an
+  // actual timeout (not a tieBehavior=nobody round).
+  const isNone = ctx.winner === "none";
+  const isTimeout = isNone && ctx.resultReason !== "tied_nobody";
+  const isTiedNobody = isNone && ctx.resultReason === "tied_nobody";
 
   // On timeout, fetch a handful of words that WOULD have worked, so the
   // players see what they missed.
@@ -127,18 +133,15 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
 
   return (
     <>
-      <TopChrome
-        round={ctx.round}
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        onShare={ctx.openShare}
-      />
       <div className="wp-body">
         <div className="wp-frame scene">
           {timeout ? (
             <div className="t-label-up">
               No one won round {ctx.round} — out of time
+            </div>
+          ) : isTiedNobody ? (
+            <div className="t-label-up">
+              Tied round {ctx.round} — neither scores
             </div>
           ) : ctx.winner === "split" ? (
             <div className="t-label-up">
@@ -154,7 +157,58 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
             </div>
           )}
 
-          {!timeout ? (
+          {ctx.winner === "split" ? (
+            <>
+              {/* Split tie: render both submitted words side-by-side. The
+               *  per-round usedWords entries carry by/word/ipa for each
+               *  attempt (computeFinalState writes both on a split), so we
+               *  filter them to this round and lay them out as a pair. */}
+              <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 mt-2 items-start sm:items-center sm:justify-center">
+                {ctx.used
+                  .filter((u) => u.round === ctx.round)
+                  .map((u) => {
+                    const playerName =
+                      u.by === "host" ? ctx.hostName : ctx.guestName;
+                    return (
+                      <div
+                        key={`${u.by}-${u.word}`}
+                        className="flex flex-col items-center"
+                      >
+                        <div
+                          className="flex items-center gap-2"
+                          style={{ marginBottom: 6 }}
+                        >
+                          <Avatar name={playerName} size={20} />
+                          <span className="t-label-up">{playerName}</span>
+                        </div>
+                        <h2
+                          className="result-word"
+                          style={{ fontSize: 40, lineHeight: 1.1 }}
+                        >
+                          <span className="anchor">{u.word[0]}</span>
+                          <span>{u.word.slice(1, -1)}</span>
+                          <span className="anchor">
+                            {u.word[u.word.length - 1]}
+                          </span>
+                        </h2>
+                        {u.ipa ? (
+                          <span
+                            className="result-ipa"
+                            style={{ fontSize: 14, marginTop: 4 }}
+                          >
+                            {u.ipa}
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          ) : isTiedNobody ? (
+            // Tied with tieBehavior=nobody: no winning word, no suggestions —
+            // just the title rendered above is enough.
+            null
+          ) : !isNone ? (
             <>
               <h1 className="result-word">
                 <span className="anchor">{word[0]}</span>
@@ -230,18 +284,24 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               {(() => {
                 // Map the canonical winner ('host' | 'guest' | 'split' | 'none')
                 // onto caller-relative "you got a point / they got a point". Split
-                // gives both, 'none' (timeout) gives neither.
+                // gives both, 'none' (timeout) gives neither. We also derive the
+                // pre-increment score so <CountUp> animates from old → current,
+                // reinforcing the +1 delta float.
                 const meRole: "host" | "guest" = ctx.meIsHost ? "host" : "guest";
                 const themRole: "host" | "guest" = ctx.meIsHost ? "guest" : "host";
                 const youGotPoint =
                   ctx.winner === meRole || ctx.winner === "split";
                 const themGotPoint =
                   ctx.winner === themRole || ctx.winner === "split";
+                const yourPrev = ctx.you.score - (youGotPoint ? 1 : 0);
+                const theirPrev = ctx.them.score - (themGotPoint ? 1 : 0);
                 return (
                   <>
                     <span className="relative">
                       <span className="text-muted-foreground">{ctx.you.name}</span>{" "}
-                      <span className="tabular-nums">{ctx.you.score}</span>
+                      <span className="tabular-nums">
+                        <CountUp from={yourPrev} to={ctx.you.score} />
+                      </span>
                       {showDelta && youGotPoint ? (
                         <span
                           className="score-delta float-up"
@@ -254,7 +314,9 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                     <span className="text-muted-foreground">·</span>
                     <span className="relative">
                       <span className="text-muted-foreground">{ctx.them.name}</span>{" "}
-                      <span className="tabular-nums">{ctx.them.score}</span>
+                      <span className="tabular-nums">
+                        <CountUp from={theirPrev} to={ctx.them.score} />
+                      </span>
                       {showDelta && themGotPoint ? (
                         <span
                           className="score-delta float-up"

@@ -41,14 +41,16 @@ export function ScoreHud({ used, you, them }: Props) {
         </Button>
       </div>
       {open && used.length > 0 ? (
-        <div id={panelId} className="used-list mt-3" style={{ maxHeight: 150, overflowY: "auto" }}>
+        <div id={panelId} className="mt-3" style={{ maxHeight: 150, overflowY: "auto" }}>
           <Separator />
           {used.map((u, i) => (
-            <React.Fragment key={u.round}>
+            <React.Fragment key={`${u.round}-${u.by}-${u.word}`}>
               <div className="used-row">
-                <span className="meta">Rd {u.round}</span>
-                <span className="word">{u.word}</span>
-                <span className="ipa">{u.ipa}</span>
+                <div className="flex items-baseline gap-3 min-w-0">
+                  <span className="meta">Rd {u.round}</span>
+                  <span className="word truncate">{u.word}</span>
+                  <span className="ipa">{u.ipa}</span>
+                </div>
                 <span className="by">by {u.by}</span>
               </div>
               {i < used.length - 1 ? <Separator /> : null}

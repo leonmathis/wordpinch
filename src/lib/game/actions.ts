@@ -199,7 +199,11 @@ export function useRoomActions(opts: {
         await postState({
           ...state,
           phase: "result",
-          result: { winner: "none", submittedAt: Date.now() },
+          result: {
+            winner: "none",
+            reason: "timeout",
+            submittedAt: Date.now(),
+          },
         });
       },
 

@@ -46,6 +46,11 @@ export type GameCtx = {
   definitions: Definition[];
   /** Winner of the most recently completed round. */
   winner?: "host" | "guest" | "split" | "none";
+  /** Why the round had `winner: 'none'`. "timeout" = race timer expired
+   *  with no valid submission; "tied_nobody" = both submitted and the
+   *  configured tieBehavior was "nobody". Lets the UI distinguish a
+   *  "ran out of time" message from a "neither scored" message. */
+  resultReason?: "timeout" | "tied_nobody";
   /** Caller-relative: `you` is whoever the local viewer is. */
   you: Player;
   them: Player;
@@ -53,6 +58,12 @@ export type GameCtx = {
    *  role rather than viewer perspective (e.g. lobby roster). */
   hostName: string;
   guestName: string;
+  /**
+   * True once a player has claimed the guest slot via /join (state.players
+   * .guest is non-null). Lobby uses this to swap the fallback "guest"
+   * placeholder name for a "waiting…" state.
+   */
+  guestPresent: boolean;
   /**
    * Presence of the opponent (the *other* player slot, not the caller).
    * Derived from the channel's presence sync. While `false` during race

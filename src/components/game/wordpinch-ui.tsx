@@ -9,6 +9,7 @@ import { useRoomActions } from "@/lib/game/actions";
 import { useStoredBool, useClientId, useStoredString } from "@/lib/hooks";
 import { useRoomChannel } from "@/lib/use-room-channel";
 import { useMyRole } from "@/lib/use-my-role";
+import { AnimatePresence } from "motion/react";
 import { Landing } from "./landing";
 import { Lobby } from "./lobby";
 import { PickPhase } from "./pick-phase";
@@ -18,6 +19,8 @@ import { ResultPhase } from "./result-phase";
 import { MatchEnd } from "./match-end";
 import { SpectatorPhase } from "./spectator-phase";
 import { ReconnectBanner } from "./reconnect-banner";
+import { PhaseShell } from "./phase-shell";
+import { TopChrome } from "./top-chrome";
 
 const ShareDialog = dynamic(
   () => import("./share-dialog").then((m) => ({ default: m.ShareDialog })),
@@ -144,12 +147,17 @@ export function WordpinchUI({
     [liveState?.result?.definitions]
   );
   const winner = liveState?.result?.winner;
+  const resultReason = liveState?.result?.reason;
   const hostScore = liveState?.scores?.host ?? (!roomCode ? MOCK.you.score : 0);
   const guestScore = liveState?.scores?.guest ?? (!roomCode ? MOCK.them.score : 0);
   const hostName = liveState?.players?.host?.name
     ?? (!roomCode ? MOCK.you.name : "you");
   const guestName = liveState?.players?.guest?.name
     ?? (!roomCode ? MOCK.them.name : "guest");
+  // True when the server has someone in the guest slot — drives the lobby
+  // empty-state ("waiting…") instead of showing a fake "guest · online"
+  // pair before the second player has even opened the link.
+  const guestPresent = !!liveState?.players?.guest;
   const liveUsedWords = liveState?.usedWords;
   const usedWords = React.useMemo(
     () =>
@@ -194,6 +202,7 @@ export function WordpinchUI({
       audio: resultAudio,
       definitions: resultDefs,
       winner,
+      resultReason,
       // "you" and "them" flip based on who the caller is so the score HUD
       // and "they're typing" labels read correctly from each side. Spectators
       // see host as "you" by convention (matches the landing/lobby seed).
@@ -207,6 +216,7 @@ export function WordpinchUI({
           : { ...MOCK.them, name: guestName, score: guestScore },
       hostName,
       guestName,
+      guestPresent,
       opponentOnline,
       used: usedWords,
       roomCode: roomCode ?? MOCK.roomCode,
@@ -237,10 +247,12 @@ export function WordpinchUI({
       resultAudio,
       resultDefs,
       winner,
+      resultReason,
       hostName,
       hostScore,
       guestName,
       guestScore,
+      guestPresent,
       opponentOnline,
       usedWords,
       shareOpen,
@@ -261,22 +273,61 @@ export function WordpinchUI({
     <div className="wp-root" data-room={ctx.roomCode}>
       {reconnectOpen ? <ReconnectBanner /> : null}
 
+      {/* Persistent across phase transitions so the progress bar + theme/
+       *  mute/share icons don't flicker out during the AnimatePresence
+       *  exit-then-enter window. Visibility props are derived from the
+       *  current phase + role. */}
+      <TopChrome
+        round={ctx.round}
+        total={ctx.total}
+        muted={ctx.muted}
+        onToggleMute={ctx.toggleMute}
+        onShare={ctx.openShare}
+        showShare={phase !== "landing"}
+        showBrand={role !== "spectator"}
+      />
+
       {/* Spectator routing: any client whose role resolved to 'spectator'
        *  sees the read-only SpectatorPhase regardless of the underlying
-       *  game phase, which switches its content based on ctx.phase. */}
-      {role === "spectator" && phase !== "landing" ? (
-        <SpectatorPhase key={sceneKey} ctx={ctx} />
-      ) : (
-        <>
-          {phase === "landing" ? <Landing key={sceneKey} ctx={ctx} /> : null}
-          {phase === "lobby" ? <Lobby key={sceneKey} ctx={ctx} /> : null}
-          {phase === "pick" ? <PickPhase key={sceneKey} ctx={ctx} /> : null}
-          {phase === "reveal" ? <RevealPhase key={sceneKey} ctx={ctx} /> : null}
-          {phase === "race" ? <RacePhase key={sceneKey} ctx={ctx} /> : null}
-          {phase === "result" ? <ResultPhase key={sceneKey} ctx={ctx} /> : null}
-          {phase === "matchend" ? <MatchEnd key={sceneKey} ctx={ctx} /> : null}
-        </>
-      )}
+       *  game phase, which switches its content based on ctx.phase.
+       *  AnimatePresence with mode="wait" orchestrates exit-then-enter
+       *  between phase changes; the key is unique per (phase, round) so
+       *  the same phase across two rounds (e.g. pick) still animates. */}
+      <AnimatePresence mode="wait" initial={false}>
+        {role === "spectator" && phase !== "landing" ? (
+          <PhaseShell key={`spec-${phase}-${round}`}>
+            <SpectatorPhase ctx={ctx} />
+          </PhaseShell>
+        ) : phase === "landing" ? (
+          <PhaseShell key="landing">
+            <Landing />
+          </PhaseShell>
+        ) : phase === "lobby" ? (
+          <PhaseShell key={`lobby-${round}`}>
+            <Lobby ctx={ctx} />
+          </PhaseShell>
+        ) : phase === "pick" ? (
+          <PhaseShell key={`pick-${round}`}>
+            <PickPhase ctx={ctx} />
+          </PhaseShell>
+        ) : phase === "reveal" ? (
+          <PhaseShell key={`reveal-${round}`}>
+            <RevealPhase ctx={ctx} />
+          </PhaseShell>
+        ) : phase === "race" ? (
+          <PhaseShell key={`race-${round}`}>
+            <RacePhase ctx={ctx} />
+          </PhaseShell>
+        ) : phase === "result" ? (
+          <PhaseShell key={`result-${round}`}>
+            <ResultPhase ctx={ctx} />
+          </PhaseShell>
+        ) : phase === "matchend" ? (
+          <PhaseShell key="matchend">
+            <MatchEnd ctx={ctx} />
+          </PhaseShell>
+        ) : null}
+      </AnimatePresence>
 
       {showShare ? (
         <ShareDialog

@@ -425,10 +425,12 @@ function computeFinalState(
   const base = { ...state, pendingResult: undefined };
 
   if (attempts.length === 0) {
+    // Shouldn't normally happen — resolver only runs when pendingResult is
+    // set. Treat as timeout for safety.
     return {
       ...base,
       phase: "result",
-      result: { winner: "none", submittedAt: Date.now() },
+      result: { winner: "none", reason: "timeout", submittedAt: Date.now() },
     };
   }
 
@@ -493,7 +495,11 @@ function computeFinalState(
     return {
       ...base,
       phase: "result",
-      result: { winner: "none", submittedAt: Date.now() },
+      result: {
+        winner: "none",
+        reason: "tied_nobody",
+        submittedAt: Date.now(),
+      },
     };
   }
 

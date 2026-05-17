@@ -169,10 +169,17 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes advance-fill { from { width: 0%; } to { width: 100%; } }
+@keyframes letter-pop {
+  0%   { transform: scale(0.55); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
 
 @layer utilities {
-  /* Scene + entrance animations */
-  .scene { animation: fade-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  /* Scene + entrance animations.
+   * The phase-level fade/slide is owned by framer-motion via
+   * `<PhaseShell>` (src/components/game/phase-shell.tsx) so we no longer
+   * apply a CSS animation here — only the inner-stack spacing. */
   .scene > * + * { margin-top: 22px; }
   .animate-fade-up { animation: fade-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .animate-fade-up:nth-child(2) { animation-delay: 80ms; }
@@ -188,15 +195,16 @@
   .float-up { animation: float-up 1500ms ease-out both; }
   .count-pop { animation: count-pop 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .slide-up-in { animation: slide-up-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .letter-pop { animation: letter-pop 320ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: center bottom; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scene,
   .animate-fade-up,
   .shake,
   .float-up,
   .count-pop,
   .slide-up-in,
+  .letter-pop,
   .pulse-soft {
     animation: none;
   }
@@ -416,25 +424,24 @@
     background: var(--foreground);
   }
 
-  .used-list {
-    display: grid;
-    grid-template-columns: 36px 1fr max-content max-content;
-    column-gap: 12px;
-    row-gap: 0;
-  }
-  .used-list > [data-slot="separator"] {
-    grid-column: 1 / -1;
-  }
+  /* Used-words list follows the same conventions as the lobby's
+   * .players-row / .settings-row: each row is a 48px-min-height flex with
+   * 12px horizontal padding and justify-between, separators in the
+   * surrounding container span full width. The row's left section groups
+   * round + word + ipa; the right section carries "won by X". */
   .used-row {
-    @apply font-mono items-baseline;
-    display: grid;
-    grid-template-columns: subgrid;
-    grid-column: 1 / -1;
-    padding: 8px 0;
+    @apply flex items-center justify-between font-mono;
+    min-height: 48px;
+    padding: 0 12px;
     font-size: 13px;
+    gap: 12px;
   }
   .used-row .word { color: var(--foreground); }
-  .used-row .meta, .used-row .ipa, .used-row .by { color: var(--muted-foreground); }
+  .used-row .meta,
+  .used-row .ipa,
+  .used-row .by {
+    color: var(--muted-foreground);
+  }
 
   /* ── Overlays ─────────────────────────────────────────────────────── */
   /* .spec-banner, .reconnect-banner: replaced by shadcn `Alert` (see

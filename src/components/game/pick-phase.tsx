@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
-import { TopChrome } from "./top-chrome";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,13 +23,6 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
 
   return (
     <>
-      <TopChrome
-        round={ctx.round}
-        total={ctx.total}
-        muted={ctx.muted}
-        onToggleMute={ctx.toggleMute}
-        onShare={ctx.openShare}
-      />
       <div className="wp-body">
         <div className="wp-frame scene" style={{ alignItems: "center" }}>
           <div className="flex flex-col items-center text-center" style={{ gap: 36 }}>
@@ -97,7 +89,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
             ) : (
               <div className="flex flex-col items-center" style={{ gap: 16 }}>
                 <div
-                  className="pick-input"
+                  className="pick-input letter-pop"
                   style={{ borderBottomColor: "var(--foreground)" }}
                 >
                   {val}
