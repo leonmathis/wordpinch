@@ -79,30 +79,49 @@ export function WordpinchUI({
   // URL / internal phase. Dev phase strip can override via setLocalPhase.
   const phase: GamePhase = liveState?.phase ?? localPhase;
 
-  const round = liveState?.round || MOCK.round;
-  const total = liveState?.total || MOCK.total;
-  const roundTimerSec = liveState?.settings?.roundTimerSec || 60;
-  const letterStart = liveState?.pick?.hostLetter || MOCK.letterStart;
-  const letterEnd = liveState?.pick?.guestLetter || MOCK.letterEnd;
-  const resultWord = liveState?.result?.word?.toUpperCase() || MOCK.word;
-  const resultIpa = liveState?.result?.phonetic || MOCK.ipa;
+  const round = liveState?.round
+    ?? (!roomCode ? MOCK.round : 0);
+  const total = liveState?.total
+    ?? (!roomCode ? MOCK.total : 5);
+  const roundTimerSec = liveState?.settings?.roundTimerSec ?? 60;
+  const letterStart = liveState?.pick?.hostLetter
+    ?? (!roomCode ? MOCK.letterStart : "");
+  const letterEnd = liveState?.pick?.guestLetter
+    ?? (!roomCode ? MOCK.letterEnd : "");
+  // Limit MOCK fallbacks to the landing-only preview. In a real room we want
+  // genuine empty state to flow through instead of MOCK leaking in.
+  const isPreviewOnly = !roomCode;
+  const resultWord = liveState?.result?.word?.toUpperCase()
+    ?? (isPreviewOnly ? MOCK.word : "");
+  const resultIpa = liveState?.result?.phonetic
+    ?? (isPreviewOnly ? MOCK.ipa : "");
+  const resultAudio = liveState?.result?.audio;
   const resultDefs = React.useMemo(
     () => liveState?.result?.definitions ?? [],
     [liveState?.result?.definitions]
   );
   const winner = liveState?.result?.winner;
-  const hostScore = liveState?.scores?.host ?? MOCK.you.score;
-  const guestScore = liveState?.scores?.guest ?? MOCK.them.score;
-  const hostName = liveState?.players?.host?.name || MOCK.you.name;
-  const guestName = liveState?.players?.guest?.name || MOCK.them.name;
-  const usedWords = liveState?.usedWords?.length
-    ? liveState.usedWords.map((u) => ({
-        round: u.round,
-        word: u.word,
-        ipa: u.ipa,
-        by: u.by === "host" ? hostName : u.by === "guest" ? guestName : "split",
-      }))
-    : MOCK.used;
+  const hostScore = liveState?.scores?.host ?? (!roomCode ? MOCK.you.score : 0);
+  const guestScore = liveState?.scores?.guest ?? (!roomCode ? MOCK.them.score : 0);
+  const hostName = liveState?.players?.host?.name
+    ?? (!roomCode ? MOCK.you.name : "you");
+  const guestName = liveState?.players?.guest?.name
+    ?? (!roomCode ? MOCK.them.name : "guest");
+  const liveUsedWords = liveState?.usedWords;
+  const usedWords = React.useMemo(
+    () =>
+      liveUsedWords && liveUsedWords.length > 0
+        ? liveUsedWords.map((u) => ({
+            round: u.round,
+            word: u.word,
+            ipa: u.ipa,
+            by: u.by === "host" ? hostName : u.by === "guest" ? guestName : "split",
+          }))
+        : !roomCode
+        ? MOCK.used
+        : [],
+    [liveUsedWords, hostName, guestName, roomCode]
+  );
 
   const sceneKey = React.useMemo(
     () => `${phase}-${round}-${simulateReject}`,
@@ -124,6 +143,7 @@ export function WordpinchUI({
       letterEnd,
       word: resultWord,
       ipa: resultIpa,
+      audio: resultAudio,
       definitions: resultDefs,
       winner,
       you: { ...MOCK.you, name: hostName, score: hostScore },
@@ -150,6 +170,7 @@ export function WordpinchUI({
       letterEnd,
       resultWord,
       resultIpa,
+      resultAudio,
       resultDefs,
       winner,
       hostName,

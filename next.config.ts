@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   // Vercel / standalone.
   outputFileTracingIncludes: {
     "/api/words/validate": ["./src/lib/words/data/**"],
+    "/api/words/suggest": ["./src/lib/words/data/**"],
   },
 };
 

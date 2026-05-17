@@ -27,6 +27,8 @@ export type GameCtx = {
   letterEnd: string;
   word: string;
   ipa: string;
+  /** Pronunciation audio URL (Free Dictionary API), if any. */
+  audio?: string;
   /** Definitions for the round-winning word (from validate API). */
   definitions: Definition[];
   /** Winner of the most recently completed round. */

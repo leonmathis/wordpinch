@@ -49,6 +49,54 @@ export function useStoredBool(
   return [value, setValue] as const;
 }
 
+// ── useStoredString ────────────────────────────────────────────────────
+/**
+ * Same shape as useStoredBool but for short strings (display names,
+ * preferences). Persists under `wordpinch:v1:<shortKey>` with cross-tab sync.
+ */
+export function useStoredString(
+  shortKey: string
+): readonly [string, (next: string) => void] {
+  const key = STORAGE_PREFIX + shortKey;
+
+  const subscribe = React.useCallback(
+    (cb: () => void) => {
+      const handler = (e: StorageEvent) => {
+        if (e.key === key) cb();
+      };
+      window.addEventListener("storage", handler);
+      return () => window.removeEventListener("storage", handler);
+    },
+    [key]
+  );
+
+  const getSnapshot = React.useCallback(() => {
+    try {
+      return window.localStorage.getItem(key) ?? "";
+    } catch {
+      return "";
+    }
+  }, [key]);
+
+  const value = React.useSyncExternalStore(subscribe, getSnapshot, () => "");
+
+  const setValue = React.useCallback(
+    (next: string) => {
+      try {
+        window.localStorage.setItem(key, next);
+        window.dispatchEvent(
+          new StorageEvent("storage", { key, newValue: next })
+        );
+      } catch {
+        /* ignore */
+      }
+    },
+    [key]
+  );
+
+  return [value, setValue] as const;
+}
+
 // ── useClientId ────────────────────────────────────────────────────────
 const CLIENT_ID_KEY = STORAGE_PREFIX + "client-id";
 const clientIdNoopSubscribe = () => () => {};

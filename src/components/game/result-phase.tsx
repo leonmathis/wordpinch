@@ -7,8 +7,28 @@ import { Button } from "@/components/ui/button";
 import { Play, ArrowRight } from "lucide-react";
 import { playDing } from "@/lib/sound";
 
+type SuggestResponse = {
+  suggestions: string[];
+};
+
+function speakFallback(word: string) {
+  if (!word || typeof window === "undefined") return;
+  const synth = window.speechSynthesis;
+  if (!synth || typeof window.SpeechSynthesisUtterance !== "function") return;
+  try {
+    synth.cancel();
+    const utt = new SpeechSynthesisUtterance(word.toLowerCase());
+    utt.rate = 0.9;
+    utt.pitch = 1;
+    synth.speak(utt);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   const [showDelta, setShowDelta] = React.useState(false);
+  const [suggestions, setSuggestions] = React.useState<string[]>([]);
   React.useEffect(() => {
     playDing();
     try {
@@ -20,9 +40,48 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     return () => clearTimeout(t);
   }, []);
 
+  const isTimeout = ctx.winner === "none";
+
+  // On timeout, fetch a handful of words that WOULD have worked, so the
+  // players see what they missed.
+  React.useEffect(() => {
+    if (!isTimeout) return;
+    const start = ctx.letterStart?.toLowerCase();
+    const end = ctx.letterEnd?.toLowerCase();
+    if (!start || !end) return;
+    const params = new URLSearchParams({ start, end, min: "3" });
+    let cancelled = false;
+    fetch(`/api/words/suggest?${params}`)
+      .then((r) => (r.ok ? (r.json() as Promise<SuggestResponse>) : null))
+      .then((data) => {
+        if (!cancelled && data?.suggestions?.length) {
+          setSuggestions(data.suggestions);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isTimeout, ctx.letterStart, ctx.letterEnd]);
+
+  const playPronunciation = React.useCallback(() => {
+    // 1. Prefer the dictionary API's audio file when available.
+    if (ctx.audio) {
+      try {
+        const a = new Audio(ctx.audio);
+        a.play().catch(() => speakFallback(ctx.word));
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    // 2. Fallback to the browser's SpeechSynthesis engine.
+    speakFallback(ctx.word);
+  }, [ctx.audio, ctx.word]);
+
   const word = ctx.word;
   const mid = word.slice(1, -1).toLowerCase();
-  const timeout = ctx.winner === "none";
+  const timeout = isTimeout;
   // Fallback definitions only render when we somehow lost the API result —
   // never used in normal play, but keeps the UI from showing blank.
   const FALLBACK_DEFS = [
@@ -64,19 +123,21 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 <span className="anchor">{word[word.length - 1]}</span>
               </h1>
 
-              {ctx.ipa ? (
-                <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
+              <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
+                {ctx.ipa ? (
                   <span className="result-ipa">{ctx.ipa}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Play pronunciation"
-                    className="h-7 w-7"
-                  >
-                    <Play strokeWidth={1.7} className="size-[15px]" />
-                  </Button>
-                </div>
-              ) : null}
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Play pronunciation"
+                  className="h-7 w-7"
+                  onClick={playPronunciation}
+                  type="button"
+                >
+                  <Play strokeWidth={1.7} className="size-[15px]" />
+                </Button>
+              </div>
 
               <div style={{ marginTop: 28 }}>
                 {defs.map((d, i) => (
@@ -90,7 +151,29 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 ))}
               </div>
             </>
-          ) : null}
+          ) : (
+            <div style={{ marginTop: 20 }}>
+              <div className="t-label-up" style={{ marginBottom: 8 }}>
+                Words you could have played
+              </div>
+              {suggestions.length > 0 ? (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[14px]">
+                  {suggestions.map((w) => (
+                    <span key={w}>{w}</span>
+                  ))}
+                </div>
+              ) : (
+                <div className="t-label">
+                  Looking for examples
+                  <span className="typing-dots ml-1">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between" style={{ marginTop: 28 }}>
             <div

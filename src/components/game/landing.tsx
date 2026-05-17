@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { GameCtx } from "@/lib/game/types";
-import { useClientId } from "@/lib/hooks";
+import { useClientId, useStoredString } from "@/lib/hooks";
 import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,9 @@ const CODE_REGEX = /^[A-HJ-NP-Z2-9]{4}$/;
 export function Landing({ ctx }: { ctx: GameCtx }) {
   const router = useRouter();
   const clientId = useClientId();
+  // Name is sourced directly from localStorage via useStoredString — no local
+  // copy, no sync effect, so cross-tab edits show up immediately.
+  const [name, setName] = useStoredString("name");
   const [code, setCode] = React.useState("");
   const [creating, setCreating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -32,11 +35,15 @@ export function Landing({ ctx }: { ctx: GameCtx }) {
     if (!clientId || creating) return;
     setCreating(true);
     setError(null);
+    const trimmedName = name.trim().slice(0, 32);
     try {
       const res = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostId: clientId }),
+        body: JSON.stringify({
+          hostId: clientId,
+          hostName: trimmedName || undefined,
+        }),
       });
       const data = (await res.json()) as { code?: string; error?: string };
       if (!res.ok || !data.code) {
@@ -75,6 +82,17 @@ export function Landing({ ctx }: { ctx: GameCtx }) {
             className="mx-auto w-full"
             style={{ maxWidth: 360 }}
           >
+            <Label htmlFor="name" className="t-label-up block mb-2">
+              Your name
+            </Label>
+            <Input
+              id="name"
+              className="h-[38px] rounded-[var(--radius)] text-[14px] mb-4"
+              placeholder="you"
+              value={name}
+              maxLength={32}
+              onChange={(e) => setName(e.target.value.slice(0, 32))}
+            />
             <Label htmlFor="room" className="t-label-up block mb-2">
               Join a room
             </Label>

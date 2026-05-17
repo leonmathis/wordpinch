@@ -41,6 +41,7 @@ export type RoomActions = {
     by: "host" | "guest",
     extras?: {
       phonetic?: string;
+      audio?: string;
       definitions?: { partOfSpeech: string; definition: string; example?: string }[];
     }
   ) => Promise<void>;
@@ -125,6 +126,7 @@ export function useRoomActions(opts: {
             winner: by,
             word: trimmed,
             phonetic: extras?.phonetic,
+            audio: extras?.audio,
             definitions: extras?.definitions,
             submittedAt: Date.now(),
           },

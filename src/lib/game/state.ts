@@ -32,6 +32,8 @@ export type PersistedGameState = {
     winner: "host" | "guest" | "split" | "none";
     word?: string;
     phonetic?: string;
+    /** Pronunciation audio URL (Free Dictionary API), if present. */
+    audio?: string;
     definitions?: { partOfSpeech: string; definition: string; example?: string }[];
     submittedAt?: number;
   };

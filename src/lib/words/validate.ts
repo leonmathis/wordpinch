@@ -11,6 +11,8 @@ export type ValidationResult = {
   valid: boolean;
   word: string;
   phonetic?: string;
+  /** First non-empty audio URL from the Free Dictionary API, if any. */
+  audio?: string;
   definitions?: Definition[];
   /** "api" if the Free Dictionary API responded, "wordlist" if we fell back. */
   source: "api" | "wordlist" | "rejected";
@@ -23,30 +25,53 @@ const MAX_DEFINITIONS = 2;
 type DictApiEntry = {
   word?: string;
   phonetic?: string;
-  phonetics?: { text?: string }[];
+  phonetics?: { text?: string; audio?: string }[];
   meanings?: {
     partOfSpeech?: string;
     definitions?: { definition?: string; example?: string }[];
   }[];
 };
 
-function parseEntry(entry: DictApiEntry): Pick<ValidationResult, "phonetic" | "definitions"> {
+function parseEntry(
+  entry: DictApiEntry
+): Pick<ValidationResult, "phonetic" | "audio" | "definitions"> {
   const phonetic =
     entry.phonetic ?? entry.phonetics?.find((p) => p.text)?.text ?? undefined;
+  const audio = entry.phonetics?.find((p) => p.audio)?.audio ?? undefined;
+
+  // Take 1 definition per part of speech first (noun + verb + adj…), then
+  // backfill with additional defs from the same POS if we still have room.
   const definitions: Definition[] = [];
+  const seenPos = new Set<string>();
   for (const meaning of entry.meanings ?? []) {
-    for (const def of meaning.definitions ?? []) {
-      if (!def.definition) continue;
-      definitions.push({
-        partOfSpeech: meaning.partOfSpeech ?? "",
-        definition: def.definition,
-        example: def.example,
-      });
-      if (definitions.length >= MAX_DEFINITIONS) break;
-    }
+    const pos = meaning.partOfSpeech ?? "";
+    const first = meaning.definitions?.find((d) => d.definition);
+    if (!first?.definition) continue;
+    definitions.push({
+      partOfSpeech: pos,
+      definition: first.definition,
+      example: first.example,
+    });
+    seenPos.add(pos);
     if (definitions.length >= MAX_DEFINITIONS) break;
   }
-  return { phonetic, definitions };
+  if (definitions.length < MAX_DEFINITIONS) {
+    for (const meaning of entry.meanings ?? []) {
+      const pos = meaning.partOfSpeech ?? "";
+      // Skip the first def — already taken in the loop above.
+      const extras = (meaning.definitions ?? []).filter((d) => d.definition).slice(1);
+      for (const def of extras) {
+        definitions.push({
+          partOfSpeech: pos,
+          definition: def.definition!,
+          example: def.example,
+        });
+        if (definitions.length >= MAX_DEFINITIONS) break;
+      }
+      if (definitions.length >= MAX_DEFINITIONS) break;
+    }
+  }
+  return { phonetic, audio, definitions };
 }
 
 /**

@@ -106,6 +106,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       const data = (await res.json()) as {
         valid?: boolean;
         phonetic?: string;
+        audio?: string;
         definitions?: { partOfSpeech: string; definition: string; example?: string }[];
       };
       if (!data.valid) {
@@ -115,6 +116,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       if (ctx.actions.ready) {
         await ctx.actions.submitWord(lower, "host", {
           phonetic: data.phonetic,
+          audio: data.audio,
           definitions: data.definitions,
         });
       }
