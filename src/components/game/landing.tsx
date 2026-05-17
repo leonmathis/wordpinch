@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { GameCtx } from "@/lib/game/types";
-import { useClientId, useStoredString } from "@/lib/hooks";
+import { useClientId, useIsMounted, useStoredString } from "@/lib/hooks";
 import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +16,22 @@ const NON_CODE_CHAR_REGEX = /[^A-HJ-NP-Z2-9]/g;
 export function Landing({ ctx }: { ctx: GameCtx }) {
   const router = useRouter();
   const clientId = useClientId();
+  const isMounted = useIsMounted();
   // Name is sourced directly from localStorage via useStoredString — no local
   // copy, no sync effect, so cross-tab edits show up immediately.
   const [name, setName] = useStoredString("name");
   const [code, setCode] = React.useState("");
   const [creating, setCreating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Gate the `disabled` props on isMounted. On the server and during the
+  // initial hydration render isMounted is false, so the rendered HTML
+  // omits the disabled attribute entirely. After commit, isMounted flips
+  // to true and React updates the DOM — without a hydration mismatch
+  // warning. (base-ui's <Button> seems to render disabled={true} differently
+  // SSR vs client, which we'd otherwise trip over.)
+  const joinDisabled = isMounted && code.length !== 4;
+  const createDisabled = isMounted && (!clientId || creating);
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +124,7 @@ export function Landing({ ctx }: { ctx: GameCtx }) {
             <Button
               type="submit"
               className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium mt-3"
-              disabled={code.length !== 4}
+              disabled={joinDisabled}
             >
               Join
             </Button>
@@ -133,7 +143,7 @@ export function Landing({ ctx }: { ctx: GameCtx }) {
                 type="button"
                 variant="link"
                 onClick={handleCreate}
-                disabled={!clientId || creating}
+                disabled={createDisabled}
                 className="link-underline h-auto p-0 font-mono text-[13px] text-foreground no-underline hover:no-underline disabled:opacity-50"
               >
                 {creating ? "Creating…" : "Create new room"}

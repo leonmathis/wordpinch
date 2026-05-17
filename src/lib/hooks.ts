@@ -97,6 +97,23 @@ export function useStoredString(
   return [value, setValue] as const;
 }
 
+// ── useIsMounted ───────────────────────────────────────────────────────
+const noopSubscribe = () => () => {};
+
+/**
+ * Returns `false` during SSR and the initial hydration render, then `true`
+ * after commit. Use it to gate UI state that's only valid client-side
+ * (e.g. a disabled flag derived from localStorage) so the server-rendered
+ * HTML and the first client render match exactly.
+ */
+export function useIsMounted(): boolean {
+  return React.useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false
+  );
+}
+
 // ── useClientId ────────────────────────────────────────────────────────
 const CLIENT_ID_KEY = STORAGE_PREFIX + "client-id";
 const clientIdNoopSubscribe = () => () => {};
