@@ -15,12 +15,13 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   roomCode: string;
-  url: string;
 };
 
-export function ShareDialog({ open, onOpenChange, roomCode, url }: Props) {
+export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
   const [copied, setCopied] = React.useState(false);
-  const fullUrl = `https://${url}`;
+  // ShareDialog is next/dynamic({ ssr: false }) — always client-side, so
+  // window.location is safe. Encoding the REAL room URL (not MOCK.url).
+  const fullUrl = `${window.location.origin}/r/${roomCode}`;
   const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(

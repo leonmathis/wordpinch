@@ -242,7 +242,6 @@ export function WordpinchUI({
           open={shareOpen}
           onOpenChange={setShareOpen}
           roomCode={ctx.roomCode}
-          url={ctx.url}
         />
       ) : null}
 
