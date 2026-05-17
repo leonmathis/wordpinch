@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
+import type { PersistedGameState } from "@/lib/game/state";
 import { TopChrome } from "./top-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,11 +16,54 @@ import { Share2 } from "lucide-react";
 const SETTINGS_LABEL = "t-label font-mono text-[13px] text-muted-foreground tracking-[0.01em] cursor-pointer";
 
 /**
- * Mobile-friendly numeric stepper. The HTML `<input type="number">` hides
- * spin buttons on iOS / mobile Chrome and the on-screen numeric keypad has
- * no easy "clear" — both make small adjustments fiddly. This component
- * uses explicit -/+ buttons clamped to [min, max] and keeps a tabular
- * value display in between.
+ * Local-state mirror for a value that's authoritative on the server and
+ * propagated back via Realtime broadcast. Returns `[local, update]`:
+ *
+ *  - `local`: what to display. Updated synchronously by `update` so the UI
+ *    is responsive even before the broadcast catches up.
+ *  - `update(next)`: applies the change locally, then debounces a single
+ *    `commit(next)` call after `delayMs` (default 250 ms) so rapid clicks
+ *    coalesce into one server POST.
+ *
+ * External (broadcasted) prop changes still win — when `value` diverges
+ * from `lastSeen`, both local and lastSeen reset to it during render.
+ * (Render-phase setState is the canonical React 18 prop-to-state sync
+ * pattern; the `react-hooks/refs` lint forbids the ref alternative.)
+ */
+function useOptimisticSetting<T>(
+  value: T,
+  commit: (next: T) => void,
+  delayMs = 250
+) {
+  const [local, setLocal] = React.useState(value);
+  const [lastSeen, setLastSeen] = React.useState(value);
+  if (value !== lastSeen) {
+    setLastSeen(value);
+    setLocal(value);
+  }
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    []
+  );
+  const update = React.useCallback(
+    (next: T) => {
+      setLocal(next);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => commit(next), delayMs);
+    },
+    [commit, delayMs]
+  );
+  return [local, update] as const;
+}
+
+/**
+ * Mobile-friendly numeric stepper. Uses `useOptimisticSetting` so rapid
+ * clicks compound on the displayed value rather than the (lagging)
+ * broadcast prop — that lag previously made the +/- buttons feel dead
+ * mid-tap-sequence.
  */
 function NumberStepper({
   value,
@@ -38,36 +82,44 @@ function NumberStepper({
   onChange: (next: number) => void;
   ariaLabel?: string;
 }) {
-  const dec = () => onChange(Math.max(min, value - step));
-  const inc = () => onChange(Math.min(max, value + step));
-  const baseBtn =
-    "h-7 w-7 rounded-full border border-border bg-background text-foreground " +
-    "flex items-center justify-center font-mono text-[14px] " +
-    "disabled:opacity-30 disabled:cursor-not-allowed " +
-    "hover:bg-foreground hover:text-background transition-colors";
+  const [local, update] = useOptimisticSetting(value, onChange);
+
+  const dec = () => {
+    const next = Math.max(min, local - step);
+    if (next !== local) update(next);
+  };
+  const inc = () => {
+    const next = Math.min(max, local + step);
+    if (next !== local) update(next);
+  };
+
   return (
     <div className="flex items-center gap-2" aria-label={ariaLabel}>
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="icon"
         onClick={dec}
-        disabled={disabled || value <= min}
+        disabled={disabled || local <= min}
         aria-label="Decrease"
-        className={baseBtn}
+        className="h-8 w-8 rounded-full font-mono text-[14px]"
       >
         −
-      </button>
+      </Button>
       <span className="font-mono text-[14px] tabular-nums w-10 text-center">
-        {value}
+        {local}
       </span>
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="icon"
         onClick={inc}
-        disabled={disabled || value >= max}
+        disabled={disabled || local >= max}
         aria-label="Increase"
-        className={baseBtn}
+        className="h-8 w-8 rounded-full font-mono text-[14px]"
       >
         +
-      </button>
+      </Button>
     </div>
   );
 }
@@ -120,6 +172,43 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
       if (ctx.actions.ready) void ctx.actions.renameMe(next);
     },
     [setStoredName, ctx.actions]
+  );
+
+  // Settings commits — wrapped through useOptimisticSetting so clicks feel
+  // instant even though setSettings round-trips through the server. The
+  // commit closures depend on ctx.actions, which re-binds whenever the
+  // broadcast lands; that's fine because within a single debounce window
+  // the broadcast hasn't fired yet, so ctx.actions stays stable.
+  const actions = ctx.actions;
+  const commitTie = React.useCallback(
+    (v: PersistedGameState["settings"]["tieBehavior"]) => {
+      if (actions.ready) void actions.setSettings({ tieBehavior: v });
+    },
+    [actions]
+  );
+  const commitProper = React.useCallback(
+    (v: boolean) => {
+      if (actions.ready) void actions.setSettings({ allowProperNouns: v });
+    },
+    [actions]
+  );
+  const commitAudio = React.useCallback(
+    (v: boolean) => {
+      if (actions.ready) void actions.setSettings({ audioDefinitions: v });
+    },
+    [actions]
+  );
+  const [tieBehavior, setTieBehavior] = useOptimisticSetting(
+    ctx.settings.tieBehavior,
+    commitTie
+  );
+  const [allowProperNouns, setAllowProperNouns] = useOptimisticSetting(
+    ctx.settings.allowProperNouns,
+    commitProper
+  );
+  const [audioDefinitions, setAudioDefinitions] = useOptimisticSetting(
+    ctx.settings.audioDefinitions,
+    commitAudio
   );
 
   React.useEffect(
@@ -277,7 +366,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 <ToggleGroup
                   aria-labelledby={tieLabelId}
                   disabled={!isHost}
-                  value={[ctx.settings.tieBehavior]}
+                  value={[tieBehavior]}
                   onValueChange={(v) => {
                     const next = v[0];
                     if (
@@ -285,8 +374,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                       next === "split" ||
                       next === "nobody"
                     ) {
-                      if (ctx.actions.ready)
-                        void ctx.actions.setSettings({ tieBehavior: next });
+                      setTieBehavior(next);
                     }
                   }}
                   className="rounded-md border border-border overflow-hidden"
@@ -319,11 +407,8 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 <Switch
                   id="lobby-allow-proper"
                   disabled={!isHost}
-                  checked={ctx.settings.allowProperNouns}
-                  onCheckedChange={(v) => {
-                    if (ctx.actions.ready)
-                      void ctx.actions.setSettings({ allowProperNouns: v });
-                  }}
+                  checked={allowProperNouns}
+                  onCheckedChange={setAllowProperNouns}
                 />
               </div>
               <Separator />
@@ -334,11 +419,8 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 <Switch
                   id="lobby-audio-defs"
                   disabled={!isHost}
-                  checked={ctx.settings.audioDefinitions}
-                  onCheckedChange={(v) => {
-                    if (ctx.actions.ready)
-                      void ctx.actions.setSettings({ audioDefinitions: v });
-                  }}
+                  checked={audioDefinitions}
+                  onCheckedChange={setAudioDefinitions}
                 />
               </div>
               <Separator />
