@@ -6,8 +6,9 @@ import type { GameCtx, GamePhase } from "@/lib/game/types";
 import type { PersistedGameState } from "@/lib/game/state";
 import { MOCK } from "@/lib/game/mock";
 import { useRoomActions } from "@/lib/game/actions";
-import { useStoredBool, useClientId } from "@/lib/hooks";
+import { useStoredBool, useClientId, useStoredString } from "@/lib/hooks";
 import { useRoomChannel } from "@/lib/use-room-channel";
+import { useMyRole } from "@/lib/use-my-role";
 import { Landing } from "./landing";
 import { Lobby } from "./lobby";
 import { PickPhase } from "./pick-phase";
@@ -48,17 +49,27 @@ export function WordpinchUI({
   showReconnect = false,
 }: Props) {
   const clientId = useClientId();
+  const [storedName] = useStoredString("name");
   const [muted, setMutedStored] = useStoredBool("muted");
   const [shareOpen, setShareOpen] = React.useState(false);
   const [simulateReject, setSimulateReject] = React.useState(0);
   const [localPhase, setLocalPhase] = React.useState<GamePhase>(initialPhase);
 
-  // Subscribe to the room's Realtime channel. Skipped when there's no room
-  // (landing) or no clientId yet (pre-hydration).
+  // Resolve role (host / guest / spectator) before anything else. While
+  // resolving, treat the caller as "not the host" so we don't briefly show
+  // host-only UI (Start, settings edit, etc.) to a joining guest.
   const channelCode = roomCode && clientId ? roomCode : null;
+  const { role } = useMyRole({
+    code: channelCode,
+    clientId,
+    name: storedName,
+  });
+
   const { state: liveState, status: channelStatus } = useRoomChannel({
     code: channelCode,
     clientId: clientId || "00000000-0000-0000-0000-000000000000",
+    name: storedName.trim() || undefined,
+    role: role ?? undefined,
     initialState,
   });
 
@@ -66,6 +77,7 @@ export function WordpinchUI({
     code: channelCode,
     clientId,
     state: liveState,
+    role,
   });
 
   const toggleMute = React.useCallback(() => {
@@ -168,7 +180,7 @@ export function WordpinchUI({
       minWordLength,
       firstPicker,
       raceStartedAt,
-      meIsHost: true, // Phase 6 single-host. Phase 7 will resolve via /api/rooms/[code]/me.
+      meIsHost: role === "host",
       letterStart,
       letterEnd,
       word: resultWord,
@@ -176,8 +188,19 @@ export function WordpinchUI({
       audio: resultAudio,
       definitions: resultDefs,
       winner,
-      you: { ...MOCK.you, name: hostName, score: hostScore },
-      them: { ...MOCK.them, name: guestName, score: guestScore },
+      // "you" and "them" flip based on who the caller is so the score HUD
+      // and "they're typing" labels read correctly from each side. Spectators
+      // see host as "you" by convention (matches the landing/lobby seed).
+      you:
+        role === "guest"
+          ? { ...MOCK.them, name: guestName, score: guestScore }
+          : { ...MOCK.you, name: hostName, score: hostScore },
+      them:
+        role === "guest"
+          ? { ...MOCK.you, name: hostName, score: hostScore }
+          : { ...MOCK.them, name: guestName, score: guestScore },
+      hostName,
+      guestName,
       used: usedWords,
       roomCode: roomCode ?? MOCK.roomCode,
       url: MOCK.url,
@@ -200,6 +223,7 @@ export function WordpinchUI({
       minWordLength,
       firstPicker,
       raceStartedAt,
+      role,
       letterStart,
       letterEnd,
       resultWord,

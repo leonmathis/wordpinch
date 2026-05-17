@@ -9,14 +9,60 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Separator } from "@/components/ui/separator";
+import { useStoredString } from "@/lib/hooks";
 import { Share2 } from "lucide-react";
 
 const SETTINGS_LABEL = "t-label font-mono text-[13px] text-muted-foreground tracking-[0.01em] cursor-pointer";
+
+/**
+ * Inline name editor for the local player. `key={initialName}` on the parent
+ * makes external name changes (e.g., the other tab renamed) reset the draft
+ * to the canonical value; otherwise the draft is owned locally until blur.
+ */
+function NameEditor({
+  initialName,
+  onSave,
+}: {
+  initialName: string;
+  onSave: (next: string) => void;
+}) {
+  const [name, setName] = React.useState(initialName);
+  return (
+    <Input
+      aria-label="Your display name"
+      value={name}
+      maxLength={32}
+      onChange={(e) => setName(e.target.value.slice(0, 32))}
+      onBlur={() => {
+        const trimmed = name.trim();
+        if (trimmed && trimmed !== initialName) onSave(trimmed);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      className="h-7 w-[140px] rounded-[6px] text-[14px] px-2"
+    />
+  );
+}
 
 export function Lobby({ ctx }: { ctx: GameCtx }) {
   const [copied, setCopied] = React.useState(false);
   const tieLabelId = React.useId();
   const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Host renders settings as editable controls and owns the Start button;
+  // the guest sees a read-only view and a "waiting for host" hint. Names
+  // come straight from canonical ctx fields — the viewer-perspective flip
+  // on ctx.you/ctx.them isn't useful here, where rows are labelled by role.
+  const isHost = ctx.meIsHost;
+  const { hostName, guestName } = ctx;
+  const [, setStoredName] = useStoredString("name");
+  const handleRename = React.useCallback(
+    (next: string) => {
+      setStoredName(next);
+      if (ctx.actions.ready) void ctx.actions.renameMe(next);
+    },
+    [setStoredName, ctx.actions]
+  );
 
   React.useEffect(
     () => () => {
@@ -75,9 +121,17 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               <div className="players-row">
                 <div className="flex items-center gap-3">
                   <span className="wp-dot" aria-hidden />
-                  <span>
-                    {ctx.you.name}{" "}
-                    <span className="t-label">(host)</span>
+                  {isHost ? (
+                    <NameEditor
+                      key={hostName}
+                      initialName={hostName}
+                      onSave={handleRename}
+                    />
+                  ) : (
+                    <span>{hostName}</span>
+                  )}
+                  <span className="t-label">
+                    (host{isHost ? " · you" : ""})
                   </span>
                 </div>
                 <span className="font-mono text-muted-foreground" style={{ fontSize: 12 }}>
@@ -88,7 +142,18 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               <div className="players-row">
                 <div className="flex items-center gap-3">
                   <span className="wp-dot" aria-hidden />
-                  <span>{ctx.them.name}</span>
+                  {!isHost ? (
+                    <NameEditor
+                      key={guestName}
+                      initialName={guestName}
+                      onSave={handleRename}
+                    />
+                  ) : (
+                    <span>{guestName}</span>
+                  )}
+                  {!isHost ? (
+                    <span className="t-label">(you)</span>
+                  ) : null}
                 </div>
                 <span className="font-mono text-muted-foreground" style={{ fontSize: 12 }}>
                   online
@@ -113,6 +178,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                   type="number"
                   min={1}
                   max={15}
+                  disabled={!isHost}
                   className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
                   value={ctx.settings.rounds}
                   onChange={(e) => {
@@ -131,6 +197,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                   type="number"
                   min={5}
                   max={300}
+                  disabled={!isHost}
                   className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
                   value={ctx.settings.roundTimerSec}
                   onChange={(e) => {
@@ -149,6 +216,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                   type="number"
                   min={2}
                   max={10}
+                  disabled={!isHost}
                   className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
                   value={ctx.settings.minWordLength}
                   onChange={(e) => {
@@ -164,6 +232,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </span>
                 <ToggleGroup
                   aria-labelledby={tieLabelId}
+                  disabled={!isHost}
                   value={[ctx.settings.tieBehavior]}
                   onValueChange={(v) => {
                     const next = v[0];
@@ -205,6 +274,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </Label>
                 <Switch
                   id="lobby-allow-proper"
+                  disabled={!isHost}
                   checked={ctx.settings.allowProperNouns}
                   onCheckedChange={(v) => {
                     if (ctx.actions.ready)
@@ -219,6 +289,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                 </Label>
                 <Switch
                   id="lobby-audio-defs"
+                  disabled={!isHost}
                   checked={ctx.settings.audioDefinitions}
                   onCheckedChange={(v) => {
                     if (ctx.actions.ready)
@@ -233,7 +304,9 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
           <Button
             className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             style={{ marginTop: 32 }}
+            disabled={!isHost}
             onClick={() => {
+              if (!isHost) return;
               if (ctx.actions.ready) {
                 void ctx.actions.startMatch();
               } else {
@@ -241,10 +314,10 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               }
             }}
           >
-            Start game
+            {isHost ? "Start game" : "Waiting for host…"}
           </Button>
           <div className="t-label text-center" style={{ marginTop: 12 }}>
-            2 of 2 ready
+            {isHost ? "2 of 2 ready" : "Host will start the match"}
           </div>
         </div>
       </div>

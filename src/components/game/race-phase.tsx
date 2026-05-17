@@ -71,7 +71,9 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   });
 
   const left = useRaceTimer(initialLeft, () => {
-    if (ctx.actions.ready) void ctx.actions.timeoutRound();
+    // Host-gated: only the referee can declare a timeout. Guest fires the
+    // same callback but no-ops; they'll receive the result via broadcast.
+    if (ctx.actions.ready && ctx.meIsHost) void ctx.actions.timeoutRound();
   });
   const rejectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -151,7 +153,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
         return;
       }
       if (ctx.actions.ready) {
-        await ctx.actions.submitWord(lower, "host", {
+        await ctx.actions.submitWord(lower, {
           phonetic: data.phonetic,
           audio: data.audio,
           definitions: data.definitions,

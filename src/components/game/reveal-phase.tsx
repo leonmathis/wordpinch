@@ -20,17 +20,18 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
         }, i * 700)
       );
     }
-    // After GO + letter template (4.2s), advance to race. Guard against
-    // double-fire on remount.
+    // After GO + letter template (4.2s), the host advances to race. The
+    // guest's call is a no-op (action is host-gated) — they'll snap to
+    // race via the state broadcast.
     ts.push(
       setTimeout(() => {
         if (advanceRef.current) return;
         advanceRef.current = true;
-        if (ctx.actions.ready) void ctx.actions.advanceToRace();
+        if (ctx.actions.ready && ctx.meIsHost) void ctx.actions.advanceToRace();
       }, 4200)
     );
     return () => ts.forEach(clearTimeout);
-  }, [ctx.actions]);
+  }, [ctx.actions, ctx.meIsHost]);
 
   const A = ctx.letterStart;
   const B = ctx.letterEnd;

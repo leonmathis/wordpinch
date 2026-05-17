@@ -41,20 +41,20 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     return () => clearTimeout(t);
   }, []);
 
-  // Auto-advance after the 5s advance-bar fill completes. Both clients fire
-  // the action; only the host's POST succeeds (guests 403 silently), which
-  // matches the rest of Phase 6.
+  // Auto-advance after the 5s advance-bar fill completes. The guest's
+  // nextRound is a no-op (action is host-gated client-side too), so only
+  // the host's POST drives the transition.
   React.useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
       if (cancelled) return;
-      if (ctx.actions.ready) void ctx.actions.nextRound();
+      if (ctx.actions.ready && ctx.meIsHost) void ctx.actions.nextRound();
     }, 5200);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [ctx.actions]);
+  }, [ctx.actions, ctx.meIsHost]);
 
   const isTimeout = ctx.winner === "none";
 
@@ -238,19 +238,21 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 <span className="tabular-nums">{ctx.them.score}</span>
               </span>
             </div>
-            <Button
-              variant="link"
-              onClick={() => {
-                if (ctx.actions.ready) {
-                  void ctx.actions.nextRound();
-                } else {
-                  ctx.setPhase("matchend");
-                }
-              }}
-              className="link-underline h-auto p-0 gap-1.5 font-mono text-[13px] text-foreground no-underline hover:no-underline"
-            >
-              Next <ArrowRight strokeWidth={1.7} className="size-[13px]" />
-            </Button>
+            {ctx.meIsHost ? (
+              <Button
+                variant="link"
+                onClick={() => {
+                  if (ctx.actions.ready) {
+                    void ctx.actions.nextRound();
+                  } else {
+                    ctx.setPhase("matchend");
+                  }
+                }}
+                className="link-underline h-auto p-0 gap-1.5 font-mono text-[13px] text-foreground no-underline hover:no-underline"
+              >
+                Next <ArrowRight strokeWidth={1.7} className="size-[13px]" />
+              </Button>
+            ) : null}
           </div>
 
           <div className="advance-bar" style={{ marginTop: 14 }}>

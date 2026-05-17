@@ -46,8 +46,13 @@ export type GameCtx = {
   definitions: Definition[];
   /** Winner of the most recently completed round. */
   winner?: "host" | "guest" | "split" | "none";
+  /** Caller-relative: `you` is whoever the local viewer is. */
   you: Player;
   them: Player;
+  /** Canonical (non-flipped) display names. Used by surfaces that label by
+   *  role rather than viewer perspective (e.g. lobby roster). */
+  hostName: string;
+  guestName: string;
   used: UsedWord[];
   roomCode: string;
   url: string;

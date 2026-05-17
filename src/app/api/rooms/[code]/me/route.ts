@@ -7,13 +7,18 @@ const UUID_REGEX =
 type Params = { params: Promise<{ code: string }> };
 
 /**
- * Resolve the caller's role for this room without leaking the host's UUID.
+ * Resolve the caller's role for this room without leaking the host or guest
+ * UUIDs. Used by the client on room mount to decide whether to call
+ * /join (unclaimed slot) and which credential to send for mutations.
  *
  * Body: { clientId: string }
- * Response: { role: 'host' | 'guest' }
+ * Response:
+ *   { role: 'host' | 'guest' | 'guest_unclaimed' | 'spectator' }
  *
- * Phase 4: we only distinguish host vs guest. Spectator (3rd+ tab) is
- * resolved client-side via presence ordering once it lands.
+ * - host:           caller's clientId matches rooms.host_id
+ * - guest:          caller's clientId matches rooms.guest_id
+ * - guest_unclaimed: nobody owns the guest slot yet; caller should POST /join
+ * - spectator:      guest slot is held by someone else
  */
 export async function POST(request: Request, { params }: Params) {
   const { code: raw } = await params;
@@ -47,7 +52,14 @@ export async function POST(request: Request, { params }: Params) {
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-    const role: "host" | "guest" = room.host_id === clientId ? "host" : "guest";
+    const role: "host" | "guest" | "guest_unclaimed" | "spectator" =
+      room.host_id === clientId
+        ? "host"
+        : room.guest_id === clientId
+        ? "guest"
+        : room.guest_id === null
+        ? "guest_unclaimed"
+        : "spectator";
     return NextResponse.json(
       { role },
       { status: 200, headers: { "Cache-Control": "no-store" } }

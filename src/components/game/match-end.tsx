@@ -88,7 +88,9 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
           <Button
             className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             style={{ marginTop: 28 }}
+            disabled={!ctx.meIsHost}
             onClick={() => {
+              if (!ctx.meIsHost) return;
               if (ctx.actions.ready) {
                 void ctx.actions.rematch();
               } else {
@@ -96,7 +98,7 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               }
             }}
           >
-            Rematch
+            {ctx.meIsHost ? "Rematch" : "Waiting for host…"}
           </Button>
           <Button
             variant="ghost"
