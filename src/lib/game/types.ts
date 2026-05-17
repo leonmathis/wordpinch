@@ -70,7 +70,6 @@ export type GameCtx = {
   closeShare: () => void;
   muted: boolean;
   toggleMute: () => void;
-  simulateReject: number;
   sceneKey: string;
   /** Server-authoritative actions. `ready` is false on landing or pre-state. */
   actions: RoomActions;

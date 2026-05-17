@@ -31,17 +31,6 @@ type Props = {
   showReconnect?: boolean;
 };
 
-const VALID_PHASES: GamePhase[] = [
-  "landing",
-  "lobby",
-  "pick",
-  "reveal",
-  "race",
-  "result",
-  "matchend",
-  "spectator",
-];
-
 export function WordpinchUI({
   initialPhase = "lobby",
   roomCode,
@@ -52,7 +41,6 @@ export function WordpinchUI({
   const [storedName] = useStoredString("name");
   const [muted, setMutedStored] = useStoredBool("muted");
   const [shareOpen, setShareOpen] = React.useState(false);
-  const [simulateReject, setSimulateReject] = React.useState(0);
   const [localPhase, setLocalPhase] = React.useState<GamePhase>(initialPhase);
 
   // Resolve role (host / guest / spectator) before anything else. While
@@ -179,8 +167,8 @@ export function WordpinchUI({
   );
 
   const sceneKey = React.useMemo(
-    () => `${phase}-${round}-${simulateReject}`,
-    [phase, round, simulateReject]
+    () => `${phase}-${round}`,
+    [phase, round]
   );
 
   const reconnectOpen =
@@ -229,7 +217,6 @@ export function WordpinchUI({
       closeShare,
       muted,
       toggleMute,
-      simulateReject,
       sceneKey,
       actions,
     }),
@@ -260,7 +247,6 @@ export function WordpinchUI({
       reconnectOpen,
       muted,
       toggleMute,
-      simulateReject,
       sceneKey,
       roomCode,
       openShare,
@@ -277,10 +263,7 @@ export function WordpinchUI({
 
       {/* Spectator routing: any client whose role resolved to 'spectator'
        *  sees the read-only SpectatorPhase regardless of the underlying
-       *  game phase, which switches its content based on ctx.phase. The
-       *  explicit `phase === 'spectator'` branch below is dev-only (the
-       *  phase-strip preview); in production no real room ever advances
-       *  to a phase named 'spectator'. */}
+       *  game phase, which switches its content based on ctx.phase. */}
       {role === "spectator" && phase !== "landing" ? (
         <SpectatorPhase key={sceneKey} ctx={ctx} />
       ) : (
@@ -292,7 +275,6 @@ export function WordpinchUI({
           {phase === "race" ? <RacePhase key={sceneKey} ctx={ctx} /> : null}
           {phase === "result" ? <ResultPhase key={sceneKey} ctx={ctx} /> : null}
           {phase === "matchend" ? <MatchEnd key={sceneKey} ctx={ctx} /> : null}
-          {phase === "spectator" ? <SpectatorPhase key={sceneKey} ctx={ctx} /> : null}
         </>
       )}
 
@@ -303,54 +285,6 @@ export function WordpinchUI({
           roomCode={ctx.roomCode}
         />
       ) : null}
-
-      {process.env.NODE_ENV === "development" ? (
-        <DevPhaseNav phase={phase} setPhase={setLocalPhase} setSimulateReject={setSimulateReject} />
-      ) : null}
-    </div>
-  );
-}
-
-function DevPhaseNav({
-  phase,
-  setPhase,
-  setSimulateReject,
-}: {
-  phase: GamePhase;
-  setPhase: (p: GamePhase) => void;
-  setSimulateReject: (n: number) => void;
-}) {
-  return (
-    <div
-      className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 flex flex-wrap gap-1 px-3 py-1.5 rounded-full font-mono pointer-events-auto"
-      style={{
-        fontSize: 11,
-        background: "color-mix(in oklch, var(--foreground) 6%, transparent)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      {VALID_PHASES.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => setPhase(p)}
-          className="px-2 py-0.5 rounded-full transition-colors"
-          style={{
-            background: phase === p ? "var(--foreground)" : "transparent",
-            color: phase === p ? "var(--background)" : "var(--muted-foreground)",
-          }}
-        >
-          {p}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => setSimulateReject(Math.random())}
-        className="px-2 py-0.5 rounded-full transition-colors text-muted-foreground hover:text-foreground"
-        title="Simulate rejected word (race phase)"
-      >
-        ✗
-      </button>
     </div>
   );
 }

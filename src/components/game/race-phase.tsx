@@ -175,10 +175,6 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   }, []);
 
   React.useEffect(() => {
-    if (ctx.simulateReject) triggerReject();
-  }, [ctx.simulateReject, triggerReject]);
-
-  React.useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
   }, []);
 
