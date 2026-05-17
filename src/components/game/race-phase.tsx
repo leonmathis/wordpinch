@@ -5,6 +5,7 @@ import type { GameCtx } from "@/lib/game/types";
 import { TopChrome } from "./top-chrome";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { LettersDisplay } from "./letters-display";
 import { playBuzz } from "@/lib/sound";
 
@@ -271,6 +272,9 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
               onChange={handle}
               placeholder={`${A}${"_".repeat(gaps)}${B}`}
               aria-label="Your word"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
               // readOnly (not disabled) while submitting: keeps focus on the
               // input so the user can keep trying after a rejected word. The
               // form submit handler guards against double-submit via
@@ -281,6 +285,13 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
               className="race-progress"
               style={{ width: `${((ctx.roundTimerSec || 60) > 0 ? (left / (ctx.roundTimerSec || 60)) : 0) * 100}%` }}
             />
+            <Button
+              type="submit"
+              disabled={submitting || val.length < ctx.minWordLength}
+              className="h-[38px] w-full rounded-[var(--radius)] text-[14px] font-medium mt-3"
+            >
+              Submit
+            </Button>
           </form>
 
           <div className="flex items-center justify-between" style={{ marginTop: 14 }}>

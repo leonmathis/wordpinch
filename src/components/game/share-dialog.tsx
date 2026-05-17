@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useIsMounted } from "@/lib/hooks";
 import { QR } from "./qr";
 
 type Props = {
@@ -19,10 +20,19 @@ type Props = {
 
 export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
   const [copied, setCopied] = React.useState(false);
+  const isMounted = useIsMounted();
   // ShareDialog is next/dynamic({ ssr: false }) — always client-side, so
   // window.location is safe. Encoding the REAL room URL (not MOCK.url).
   const fullUrl = `${window.location.origin}/r/${roomCode}`;
   const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const urlInputRef = React.useRef<HTMLInputElement>(null);
+
+  // navigator.share exists on most mobile browsers + Safari; not on most
+  // desktop browsers. Gating on isMounted keeps SSR output stable.
+  const canShare =
+    isMounted &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function";
 
   React.useEffect(
     () => () => {
@@ -31,15 +41,53 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
     []
   );
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(fullUrl);
-    } catch {
-      /* ignore */
-    }
+  const flashCopied = () => {
     setCopied(true);
     if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     copyTimeoutRef.current = setTimeout(() => setCopied(false), 1200);
+  };
+
+  const copy = async () => {
+    // 1) Modern Clipboard API (secure context required — works on HTTPS and
+    //    on localhost). iOS Safari counts dialog button click as a valid
+    //    user gesture.
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(fullUrl);
+        flashCopied();
+        return;
+      } catch {
+        /* fall through to legacy path */
+      }
+    }
+    // 2) Legacy fallback — select the URL input and execCommand('copy').
+    //    Still works on older mobile browsers that block the modern API.
+    const input = urlInputRef.current;
+    if (input) {
+      input.removeAttribute("readonly");
+      input.focus();
+      input.setSelectionRange(0, fullUrl.length);
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* nothing more we can do — user can still long-press the input */
+      }
+      input.setAttribute("readonly", "");
+      flashCopied();
+    }
+  };
+
+  const share = async () => {
+    if (!canShare) return;
+    try {
+      await navigator.share({
+        title: "wordpinch",
+        text: `Join my wordpinch room: ${roomCode}`,
+        url: fullUrl,
+      });
+    } catch {
+      // User cancelled or share failed — no-op (no error toast needed).
+    }
   };
 
   return (
@@ -50,6 +98,7 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
 
         <div className="url-row mt-4">
           <Input
+            ref={urlInputRef}
             readOnly
             value={fullUrl}
             onFocus={(e) => e.currentTarget.select()}
@@ -63,6 +112,15 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
             {copied ? "copied" : "Copy"}
           </Button>
         </div>
+
+        {canShare ? (
+          <Button
+            onClick={share}
+            className="w-full h-9 rounded-[var(--radius)] text-[13px] font-medium mt-3"
+          >
+            Share via…
+          </Button>
+        ) : null}
 
         <QR value={fullUrl} />
 

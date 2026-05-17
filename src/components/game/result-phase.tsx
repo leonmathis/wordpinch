@@ -140,9 +140,16 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
             <div className="t-label-up">
               No one won round {ctx.round} — out of time
             </div>
+          ) : ctx.winner === "split" ? (
+            <div className="t-label-up">
+              Tied round {ctx.round} — {ctx.hostName} and {ctx.guestName} both
+              score
+            </div>
           ) : (
             <div className="t-label-up">
-              {ctx.winner === "guest" ? ctx.them.name : ctx.you.name} won round{" "}
+              {/* Canonical names, not the viewer-perspective ctx.you/ctx.them
+                  flip — otherwise the guest sees host's name when they win. */}
+              {ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round{" "}
               {ctx.round}
             </div>
           )}

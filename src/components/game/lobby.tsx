@@ -15,6 +15,64 @@ import { Share2 } from "lucide-react";
 const SETTINGS_LABEL = "t-label font-mono text-[13px] text-muted-foreground tracking-[0.01em] cursor-pointer";
 
 /**
+ * Mobile-friendly numeric stepper. The HTML `<input type="number">` hides
+ * spin buttons on iOS / mobile Chrome and the on-screen numeric keypad has
+ * no easy "clear" — both make small adjustments fiddly. This component
+ * uses explicit -/+ buttons clamped to [min, max] and keeps a tabular
+ * value display in between.
+ */
+function NumberStepper({
+  value,
+  min,
+  max,
+  step = 1,
+  disabled,
+  onChange,
+  ariaLabel,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  disabled?: boolean;
+  onChange: (next: number) => void;
+  ariaLabel?: string;
+}) {
+  const dec = () => onChange(Math.max(min, value - step));
+  const inc = () => onChange(Math.min(max, value + step));
+  const baseBtn =
+    "h-7 w-7 rounded-full border border-border bg-background text-foreground " +
+    "flex items-center justify-center font-mono text-[14px] " +
+    "disabled:opacity-30 disabled:cursor-not-allowed " +
+    "hover:bg-foreground hover:text-background transition-colors";
+  return (
+    <div className="flex items-center gap-2" aria-label={ariaLabel}>
+      <button
+        type="button"
+        onClick={dec}
+        disabled={disabled || value <= min}
+        aria-label="Decrease"
+        className={baseBtn}
+      >
+        −
+      </button>
+      <span className="font-mono text-[14px] tabular-nums w-10 text-center">
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={inc}
+        disabled={disabled || value >= max}
+        aria-label="Increase"
+        className={baseBtn}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+/**
  * Inline name editor for the local player. `key={initialName}` on the parent
  * makes external name changes (e.g., the other tab renamed) reset the draft
  * to the canonical value; otherwise the draft is owned locally until blur.
@@ -170,57 +228,43 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
             <div>
               <Separator />
               <div className="settings-row">
-                <Label htmlFor="lobby-rounds" className={SETTINGS_LABEL}>
-                  Rounds
-                </Label>
-                <Input
-                  id="lobby-rounds"
-                  type="number"
+                <span className={SETTINGS_LABEL}>Rounds</span>
+                <NumberStepper
+                  value={ctx.settings.rounds}
                   min={1}
                   max={15}
                   disabled={!isHost}
-                  className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
-                  value={ctx.settings.rounds}
-                  onChange={(e) => {
-                    const n = Math.max(1, Math.min(15, parseInt(e.target.value, 10) || 1));
+                  ariaLabel="Rounds"
+                  onChange={(n) => {
                     if (ctx.actions.ready) void ctx.actions.setSettings({ rounds: n });
                   }}
                 />
               </div>
               <Separator />
               <div className="settings-row">
-                <Label htmlFor="lobby-timer" className={SETTINGS_LABEL}>
-                  Round timer
-                </Label>
-                <Input
-                  id="lobby-timer"
-                  type="number"
+                <span className={SETTINGS_LABEL}>Round timer (s)</span>
+                <NumberStepper
+                  value={ctx.settings.roundTimerSec}
                   min={5}
                   max={300}
+                  step={5}
                   disabled={!isHost}
-                  className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
-                  value={ctx.settings.roundTimerSec}
-                  onChange={(e) => {
-                    const n = Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 60));
+                  ariaLabel="Round timer in seconds"
+                  onChange={(n) => {
                     if (ctx.actions.ready) void ctx.actions.setSettings({ roundTimerSec: n });
                   }}
                 />
               </div>
               <Separator />
               <div className="settings-row">
-                <Label htmlFor="lobby-min-length" className={SETTINGS_LABEL}>
-                  Min word length
-                </Label>
-                <Input
-                  id="lobby-min-length"
-                  type="number"
+                <span className={SETTINGS_LABEL}>Min word length</span>
+                <NumberStepper
+                  value={ctx.settings.minWordLength}
                   min={2}
                   max={10}
                   disabled={!isHost}
-                  className="font-mono text-center h-[34px] w-16 rounded-[var(--radius)] text-[14px]"
-                  value={ctx.settings.minWordLength}
-                  onChange={(e) => {
-                    const n = Math.max(2, Math.min(10, parseInt(e.target.value, 10) || 3));
+                  ariaLabel="Minimum word length"
+                  onChange={(n) => {
                     if (ctx.actions.ready) void ctx.actions.setSettings({ minWordLength: n });
                   }}
                 />

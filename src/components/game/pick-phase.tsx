@@ -5,6 +5,7 @@ import type { GameCtx } from "@/lib/game/types";
 import { TopChrome } from "./top-chrome";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const PICK_INPUT_OVERRIDES =
   "pick-input h-auto w-[110px] max-[500px]:w-[84px] rounded-none border-0 border-b bg-transparent dark:bg-transparent px-0 pt-0 pb-3 text-[72px] max-[500px]:text-[56px] md:text-[72px] focus-visible:ring-0 focus-visible:border-b-foreground";
@@ -73,6 +74,10 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
                   className={PICK_INPUT_OVERRIDES}
                   maxLength={1}
                   value={val}
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
                   onChange={(e) =>
                     setVal(
                       e.target.value.toUpperCase().replace(NON_ALPHA_REGEX, "")
@@ -80,7 +85,14 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
                   }
                   aria-label="Your letter"
                 />
-                <div className="t-label">Press Enter to lock</div>
+                <Button
+                  type="submit"
+                  disabled={!val}
+                  className="h-[38px] w-[180px] rounded-[var(--radius)] text-[14px] font-medium"
+                >
+                  Lock letter
+                </Button>
+                <div className="t-label">or press Enter</div>
               </form>
             ) : (
               <div className="flex flex-col items-center" style={{ gap: 16 }}>

@@ -7,10 +7,13 @@ const UUID_REGEX =
 
 /**
  * Tie-detection window: time the first submitter's resolver waits before
- * computing the round outcome. Long enough to catch a genuinely-tied second
- * submission, short enough that there's no noticeable round-end lag.
+ * computing the round outcome. Empirically tuned: dictionary validation
+ * (Free Dictionary API) is the slow step on the client, so two human
+ * players who press Enter at the same instant typically have their
+ * /submit calls arrive 200–400 ms apart even on good networks. 500 ms
+ * catches the realistic tie window without making solo wins feel sluggish.
  */
-const TIE_WINDOW_MS = 200;
+const TIE_WINDOW_MS = 500;
 
 type Params = { params: Promise<{ code: string }> };
 
