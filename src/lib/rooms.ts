@@ -105,6 +105,15 @@ export async function getRoomByCode(
  * client-supplied letters and carry the server's forward. Transitions
  * *into* or *out of* pick (startMatch, nextRound, lockPlayerLetter's
  * reveal flip) are unaffected.
+ *
+ * Matchend score preservation: a late-arriving near-miss can change scores
+ * after the host's local `liveState` snapshot but before their
+ * `nextRound` → matchend POST lands. Without this guard the host would
+ * write back stale scores and the matchend screen would flash
+ * "you won" → "tied" the moment the near-miss broadcast caught up.
+ * On the matchend transition we always take `scores` and `usedWords`
+ * from the current DB row, ignoring whatever the client sent — the
+ * client never holds authoritative score info anyway.
  */
 export async function updateRoomState(opts: {
   code: string;
@@ -115,7 +124,7 @@ export async function updateRoomState(opts: {
   const admin = supabaseAdmin();
 
   let stateToWrite: PersistedGameState = opts.state;
-  if (opts.state.phase === "pick") {
+  if (opts.state.phase === "pick" || opts.state.phase === "matchend") {
     const current = await admin
       .from("rooms")
       .select("state")
@@ -125,7 +134,7 @@ export async function updateRoomState(opts: {
     if (current.error) throw current.error;
     if (!current.data) return false;
     const currentState = current.data.state as PersistedGameState;
-    if (currentState.phase === "pick") {
+    if (opts.state.phase === "pick" && currentState.phase === "pick") {
       stateToWrite = {
         ...opts.state,
         pick: {
@@ -133,6 +142,12 @@ export async function updateRoomState(opts: {
           hostLetter: currentState.pick.hostLetter,
           guestLetter: currentState.pick.guestLetter,
         },
+      };
+    } else if (opts.state.phase === "matchend") {
+      stateToWrite = {
+        ...opts.state,
+        scores: currentState.scores,
+        usedWords: currentState.usedWords,
       };
     }
   }

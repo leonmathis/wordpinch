@@ -20,6 +20,7 @@ import { MatchEnd } from "./match-end";
 import { SpectatorPhase } from "./spectator-phase";
 import { ReconnectBanner } from "./reconnect-banner";
 import { PhaseShell } from "./phase-shell";
+import { SettlingPhase } from "./settling-phase";
 import { TopChrome } from "./top-chrome";
 
 const ShareDialog = dynamic(
@@ -107,12 +108,30 @@ export function WordpinchUI({
 
   // Phase: prefer server state when we have it; otherwise fall back to the
   // URL / internal phase. Dev phase strip can override via setLocalPhase.
-  // Additionally, while the local submission is still in flight, hold the
-  // visible phase at "race" so the loser's screen doesn't transition
-  // through "you lost" before their near-miss attempt is recorded.
-  const livePhase: GamePhase = liveState?.phase ?? localPhase;
-  const phase: GamePhase =
-    submitInFlight && livePhase === "result" ? "race" : livePhase;
+  const phase: GamePhase = liveState?.phase ?? localPhase;
+
+  // Settling = the local client has a submission registered server-side
+  // and is waiting for the round to finalize. While true we show
+  // `SettlingPhase` (a loading overlay) in place of the race/result
+  // phase so the result screen only mounts once the outcome is final:
+  //
+  //   - `submitInFlight`: the fetch chain (validate + submit) hasn't
+  //     returned yet — our attempt may not even be persisted.
+  //   - `myAttemptInPending`: server has our attempt in `pendingResult`,
+  //     so the resolver is mid-flight (or about to fire).
+  //
+  // Once the resolver commits (phase=result, pendingResult cleared),
+  // settling drops and the result phase mounts. Spectators never set
+  // either flag, so they bypass the overlay entirely.
+  const myRoleForSettling =
+    role === "host" || role === "guest" ? role : null;
+  const myAttemptInPending = myRoleForSettling
+    ? liveState?.pendingResult?.attempts.some(
+        (a) => a.by === myRoleForSettling
+      ) ?? false
+    : false;
+  const isSettling =
+    submitInFlight || (myAttemptInPending && phase === "race");
 
   // On the landing page (no roomCode, phase === 'landing') there's no
   // active match, so the round counter should be 0 — not the MOCK
@@ -311,13 +330,24 @@ export function WordpinchUI({
       {/* Spectator routing: any client whose role resolved to 'spectator'
        *  sees the read-only SpectatorPhase regardless of the underlying
        *  game phase, which switches its content based on ctx.phase.
-       *  AnimatePresence with mode="wait" orchestrates exit-then-enter
-       *  between phase changes; the key is unique per (phase, round) so
-       *  the same phase across two rounds (e.g. pick) still animates. */}
-      <AnimatePresence mode="wait" initial={false}>
+       *  AnimatePresence with mode="popLayout" overlaps exit + enter
+       *  (halves perceived transition time from ~440 ms to ~220 ms)
+       *  while popping the exiting child out of layout so flex-1
+       *  doesn't briefly split the column 50/50. Keys are unique per
+       *  (phase, round) so the same phase across two rounds (e.g. pick)
+       *  still animates. */}
+      <AnimatePresence mode="popLayout" initial={false}>
         {role === "spectator" && phase !== "landing" ? (
           <PhaseShell key={`spec-${phase}-${round}`}>
             <SpectatorPhase ctx={ctx} />
+          </PhaseShell>
+        ) : isSettling ? (
+          // Settling overlay wins over race / result for the local
+          // player. AnimatePresence treats this as its own scene so
+          // it fades in cleanly on submit and fades out into the
+          // result phase once the round resolves.
+          <PhaseShell key={`settling-${round}`}>
+            <SettlingPhase />
           </PhaseShell>
         ) : phase === "landing" ? (
           <PhaseShell key="landing">

@@ -112,10 +112,14 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   // Side-by-side renders for sim ties AND near-misses.
   const hasSideBySide = sideBySideAttempts.length >= 2 && (isSplit || isNearMiss);
 
-  // On timeout, fetch a handful of words that WOULD have worked, so the
-  // players see what they missed.
+  // Fetch suggestions whenever the round ended without a winning word:
+  // a real timeout (no submissions or both clocks ran out), a sim-tie
+  // with tieBehavior=nobody, or a timeout-nobody. In every case the
+  // players see "here's what would have worked" so the round doesn't
+  // feel like dead time.
+  const shouldFetchSuggestions = isNone;
   React.useEffect(() => {
-    if (!isTimeout) return;
+    if (!shouldFetchSuggestions) return;
     const start = ctx.letterStart?.toLowerCase();
     const end = ctx.letterEnd?.toLowerCase();
     if (!start || !end) return;
@@ -138,7 +142,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     return () => {
       cancelled = true;
     };
-  }, [isTimeout, ctx.letterStart, ctx.letterEnd, ctx.minWordLength]);
+  }, [shouldFetchSuggestions, ctx.letterStart, ctx.letterEnd, ctx.minWordLength]);
 
   const playPronunciation = React.useCallback(() => {
     // The global mute toggle wins over the audio-definitions setting —
@@ -276,11 +280,6 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 </div>
               ) : null}
             </>
-          ) : isNone && !isTimeout ? (
-            // Sim-tie-nobody: both submitted, neither scored. No word to
-            // show, no suggestions needed (players already tried). Title
-            // above is enough.
-            null
           ) : isForfeit ? (
             // Forfeit: opponent stayed disconnected through the 10s grace
             // period. The title above (X wins round Y by forfeit) tells
