@@ -43,7 +43,17 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      {/* `h-full overflow-hidden` (instead of `min-h-full`) is what
+       *  finally locks the flex column to the viewport. With min-h-full
+       *  the body had no DEFINITE height for `wp-root`'s `flex-1` to
+       *  fill, so every child along the chain (wp-root → PhaseShell →
+       *  wp-body) got sized to its content. A tall phase (e.g. result
+       *  with definitions + suggestions) then pushed `body` past the
+       *  viewport and the *browser* painted its own scrollbar — which
+       *  `wp-body`'s `scrollbar-width: none` couldn't hide because
+       *  it's on `html`, not on `wp-body`. `overflow-hidden` belt-and-
+       *  suspenders this by clipping anything that might still escape. */}
+      <body className="h-full overflow-hidden flex flex-col bg-background text-foreground">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
