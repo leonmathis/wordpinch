@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useIsMounted } from "@/lib/hooks";
 import { QR } from "./qr";
 import { toast } from "sonner";
+import { Copy, Check } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -109,9 +110,23 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
           <Button
             variant="ghost"
             onClick={copy}
-            className="rounded-none border-l border-border h-9 px-3.5 text-[13px] font-normal"
+            aria-label={copied ? "Copied" : "Copy link"}
+            className="rounded-none border-l border-border h-9 w-10 px-0 grid place-items-center"
           >
-            {copied ? "copied" : "Copy"}
+            <span className="relative inline-flex h-4 w-4 items-center justify-center">
+              <Copy
+                className={`absolute h-4 w-4 transition-all duration-200 ease-out motion-reduce:transition-none ${
+                  copied ? "scale-75 opacity-0" : "scale-100 opacity-100"
+                }`}
+                aria-hidden
+              />
+              <Check
+                className={`absolute h-4 w-4 transition-all duration-200 ease-out motion-reduce:transition-none ${
+                  copied ? "scale-100 opacity-100" : "scale-75 opacity-0"
+                }`}
+                aria-hidden
+              />
+            </span>
           </Button>
         </div>
 
