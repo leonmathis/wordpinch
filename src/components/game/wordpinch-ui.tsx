@@ -45,6 +45,13 @@ export function WordpinchUI({
   const [muted, setMutedStored] = useStoredBool("muted");
   const [shareOpen, setShareOpen] = React.useState(false);
   const [localPhase, setLocalPhase] = React.useState<GamePhase>(initialPhase);
+  // Set by `RacePhase` while a submission is in-flight (validate + submit
+  // roundtrip). While true we hold the visible phase at "race" even after
+  // the server has broadcast phase=result, so the loser sees the final
+  // result view (with their near-miss attempt) the first time the result
+  // screen appears — not a brief "you lost" before the near-miss
+  // broadcast/response lands.
+  const [submitInFlight, setSubmitInFlight] = React.useState(false);
 
   // Resolve role (host / guest / spectator) before anything else. While
   // resolving, treat the caller as "not the host" so we don't briefly show
@@ -61,6 +68,7 @@ export function WordpinchUI({
     status: channelStatus,
     presence,
     presenceReady,
+    applyState,
   } = useRoomChannel({
     code: channelCode,
     clientId: clientId || "00000000-0000-0000-0000-000000000000",
@@ -87,6 +95,7 @@ export function WordpinchUI({
     clientId,
     state: liveState,
     role,
+    applyState,
   });
 
   const toggleMute = React.useCallback(() => {
@@ -98,7 +107,12 @@ export function WordpinchUI({
 
   // Phase: prefer server state when we have it; otherwise fall back to the
   // URL / internal phase. Dev phase strip can override via setLocalPhase.
-  const phase: GamePhase = liveState?.phase ?? localPhase;
+  // Additionally, while the local submission is still in flight, hold the
+  // visible phase at "race" so the loser's screen doesn't transition
+  // through "you lost" before their near-miss attempt is recorded.
+  const livePhase: GamePhase = liveState?.phase ?? localPhase;
+  const phase: GamePhase =
+    submitInFlight && livePhase === "result" ? "race" : livePhase;
 
   // On the landing page (no roomCode, phase === 'landing') there's no
   // active match, so the round counter should be 0 — not the MOCK
@@ -233,6 +247,7 @@ export function WordpinchUI({
       toggleMute,
       sceneKey,
       actions,
+      setSubmitInFlight,
     }),
     [
       phase,

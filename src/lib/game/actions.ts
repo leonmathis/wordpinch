@@ -97,8 +97,14 @@ export function useRoomActions(opts: {
   clientId: string;
   state: PersistedGameState | null;
   role: "host" | "guest" | "spectator" | null;
+  /**
+   * Optional state-applicator that mutations can use to seed the live
+   * state from their API response, bypassing the broadcast race. Wired
+   * to `useRoomChannel`'s exposed setter in `WordpinchUI`.
+   */
+  applyState?: (state: PersistedGameState) => void;
 }): RoomActions {
-  const { state, role } = opts;
+  const { state, role, applyState } = opts;
   const postState = usePostState(opts);
   const code = opts.code;
   const clientId = opts.clientId;
@@ -148,7 +154,21 @@ export function useRoomActions(opts: {
           definitions: extras?.definitions,
         }),
       });
-      if (!res.ok && res.status !== 409) {
+      if (res.ok) {
+        // Seed liveState from the response so the result phase mounts
+        // with the *final* state (incl. near-miss attempts) rather than
+        // briefly rendering the solo-winner snapshot before the
+        // broadcast catches up.
+        try {
+          const data = (await res.json()) as {
+            ok?: boolean;
+            state?: PersistedGameState;
+          };
+          if (data.state && applyState) applyState(data.state);
+        } catch {
+          /* ignore malformed body */
+        }
+      } else if (res.status !== 409) {
         // 409 is the "someone else already submitted" case — expected and
         // benign; their state will arrive via broadcast.
         console.warn("[useRoomActions] submitWord failed", await res.text());
@@ -317,5 +337,5 @@ export function useRoomActions(opts: {
         });
       },
     };
-  }, [state, role, postState, code, clientId]);
+  }, [state, role, postState, code, clientId, applyState]);
 }

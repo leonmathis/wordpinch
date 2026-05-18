@@ -328,11 +328,14 @@ type PendingAttempt = NonNullable<PersistedGameState["pendingResult"]>["attempts
 /**
  * How long after a solo-winner result is committed we'll still accept the
  * loser's submission as a "near miss" (informational only — no score
- * change). Tuned to capture genuine "we both clicked Submit at roughly
- * the same time but one was a touch faster" cases without indefinitely
- * accepting late submissions into a concluded round.
+ * change). Sized to comfortably cover the auto-advance window
+ * (result-phase shows for ~5.2 s before nextRound fires) so any
+ * submission the loser fired before the next round starts gets credited
+ * — the client-side phase-hold during in-flight submits delivers that
+ * "submitted before the screen appeared" promise, and this just makes
+ * sure the server doesn't reject the late half of that race.
  */
-const NEAR_MISS_WINDOW_MS = 1500;
+const NEAR_MISS_WINDOW_MS = 5000;
 
 /**
  * Wall-clock submission time → milliseconds elapsed since the round's

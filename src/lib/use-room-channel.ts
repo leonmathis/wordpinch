@@ -71,6 +71,15 @@ export function useRoomChannel(opts: UseRoomChannelOpts): {
    * negotiates, which would otherwise look like "opponent gone".
    */
   presenceReady: boolean;
+  /**
+   * Synchronously seed `state` from a non-broadcast source — used by
+   * mutation actions (e.g. submitWord) whose API response carries the
+   * authoritative post-mutation state. This sidesteps the `after()`
+   * broadcast race that otherwise lets the result phase mount with a
+   * stale view ("you lost") and then flicker to the real view
+   * ("near-miss") once the broadcast lands a couple hundred ms later.
+   */
+  applyState: (state: PersistedGameState) => void;
 } {
   const { code, clientId, name, role, initialState } = opts;
 
@@ -169,5 +178,5 @@ export function useRoomChannel(opts: UseRoomChannelOpts): {
     };
   }, [code, clientId, name, role]);
 
-  return { state, status, presence, presenceReady };
+  return { state, status, presence, presenceReady, applyState: setState };
 }

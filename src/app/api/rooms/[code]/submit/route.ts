@@ -1,5 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { isValidCode, recordAttempt, resolveRound } from "@/lib/rooms";
+import { getRoomByCode, isValidCode, recordAttempt, resolveRound } from "@/lib/rooms";
 import { broadcastRoomState } from "@/lib/realtime-server";
 
 const UUID_REGEX =
@@ -14,6 +14,18 @@ const UUID_REGEX =
  * catches the realistic tie window without making solo wins feel sluggish.
  */
 const TIE_WINDOW_MS = 500;
+
+/**
+ * Once the resolver has decided a *solo* winner, delay broadcasting the
+ * result by this much to absorb any late-arriving submission as a
+ * near-miss. Without the hold, the winner's UI mounts the result phase
+ * with the single-attempt snapshot, then flickers to the near-miss view
+ * a couple hundred ms later when the loser's `/submit` broadcast lands.
+ * With the hold, the deferred re-read picks up the near-miss before the
+ * first broadcast goes out and both clients render the final view on
+ * first mount. Solo wins (no near-miss) pay this delay as a cost.
+ */
+const NEAR_MISS_BROADCAST_DELAY_MS = 600;
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -115,9 +127,29 @@ export async function POST(request: Request, { params }: Params) {
       after(async () => {
         await new Promise((r) => setTimeout(r, TIE_WINDOW_MS));
         const resolved = await resolveRound({ code });
-        if (resolved) {
-          await broadcastRoomState(code, resolved.state);
+        if (!resolved) return;
+        // For a *solo* outcome (only one attempt landed in the tie
+        // window), hold the broadcast briefly so any near-miss submit
+        // that arrives in the next ~600 ms is appended before the
+        // result screen mounts on the winner's client. Then re-read
+        // and broadcast whatever's authoritative (solo OR near-miss).
+        const isSoloWinner =
+          resolved.state.phase === "result" &&
+          !!resolved.state.result &&
+          (resolved.state.result.winner === "host" ||
+            resolved.state.result.winner === "guest") &&
+          resolved.state.result.attempts?.length === 1;
+        if (isSoloWinner) {
+          await new Promise((r) =>
+            setTimeout(r, NEAR_MISS_BROADCAST_DELAY_MS)
+          );
+          const fresh = await getRoomByCode(code);
+          if (fresh) {
+            await broadcastRoomState(code, fresh.state);
+            return;
+          }
         }
+        await broadcastRoomState(code, resolved.state);
       });
     }
     // Either way, broadcast the *current* state so the other client's UI
@@ -126,8 +158,12 @@ export async function POST(request: Request, { params }: Params) {
     after(async () => {
       await broadcastRoomState(code, result.state);
     });
+    // Return the state in the body so the submitter can apply it
+    // synchronously and avoid racing the after() broadcast. That race
+    // is what produced the "won-screen flash before near-miss view"
+    // when the loser's submission landed during the near-miss window.
     return NextResponse.json(
-      { ok: true },
+      { ok: true, state: result.state },
       { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {

@@ -213,6 +213,9 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       return;
     }
     setSubmitting(true);
+    // Tell the parent we're submitting so it holds the race-phase view
+    // even if a phase=result broadcast arrives before our submit lands.
+    ctx.setSubmitInFlight(true);
     try {
       const res = await fetch("/api/words/validate", {
         method: "POST",
@@ -244,6 +247,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       triggerReject();
     } finally {
       setSubmitting(false);
+      ctx.setSubmitInFlight(false);
     }
   };
 

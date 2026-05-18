@@ -108,4 +108,13 @@ export type GameCtx = {
   sceneKey: string;
   /** Server-authoritative actions. `ready` is false on landing or pre-state. */
   actions: RoomActions;
+  /**
+   * Race-phase signals that a word submission is in-flight so the parent
+   * can hold the race-phase override active even after the live state
+   * has flipped to `result`. This avoids the "you lost" flash on the
+   * loser's screen before their near-miss attempt is appended — the
+   * result phase only mounts once the submitter knows their final
+   * outcome.
+   */
+  setSubmitInFlight: (b: boolean) => void;
 };
