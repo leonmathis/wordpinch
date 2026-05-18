@@ -365,22 +365,50 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               style={{ fontSize: 13 }}
             >
               {(() => {
-                // Map the canonical winner ('host' | 'guest' | 'split' | 'none')
-                // onto caller-relative "you got a point / they got a point". Split
-                // gives both, 'none' (timeout) gives neither. We also derive the
-                // pre-increment score so <CountUp> animates from old → current,
-                // reinforcing the +1 delta float.
+                // Compute the score delta this round per side, mirroring the
+                // server-side scoring math in `computeFinalState` /
+                // `recordNearMiss`. The delta drives both the pre-increment
+                // value passed to <CountUp> and the "+N" float, so all three
+                // (final score, animation start, badge) stay consistent
+                // even when the length-bonus setting kicks in (e.g. "+1.5"
+                // for a 6-letter solo win at min=5).
                 const meRole: "host" | "guest" = ctx.meIsHost ? "host" : "guest";
                 const themRole: "host" | "guest" = ctx.meIsHost ? "guest" : "host";
-                // `isScoredSplit` excludes replay_pending — that case
-                // uses winner='split' for the "both" framing but does
-                // NOT award points, so we must not animate a phantom +1.
-                const youGotPoint =
-                  ctx.winner === meRole || isScoredSplit;
-                const themGotPoint =
-                  ctx.winner === themRole || isScoredSplit;
-                const yourPrev = ctx.you.score - (youGotPoint ? 1 : 0);
-                const theirPrev = ctx.them.score - (themGotPoint ? 1 : 0);
+                const bonusEnabled = ctx.settings.lengthBonus ?? false;
+                const wordBonus = (word: string | undefined) => {
+                  if (!bonusEnabled || !word) return 0;
+                  const extra = word.length - ctx.minWordLength;
+                  return extra > 0 ? extra * 0.5 : 0;
+                };
+                const roundDelta = (side: "host" | "guest"): number => {
+                  if (isReplayPending) return 0;
+                  if (isForfeit) return ctx.winner === side ? 1 : 0;
+                  if (isTimeout) {
+                    // Timeout has no submissions to bonus; split awards 1
+                    // base to each, otherwise nobody.
+                    return isSplit ? 1 : 0;
+                  }
+                  const myAttempt = ctx.resultAttempts?.find(
+                    (a) => a.by === side
+                  );
+                  const bonus = wordBonus(myAttempt?.word);
+                  // Won outright OR sim-tie split (both score).
+                  if (ctx.winner === side || isScoredSplit) {
+                    return 1 + bonus;
+                  }
+                  // Tied-nobody with both submitted: only the bonus.
+                  if (isNone && myAttempt) return bonus;
+                  // Other side won outright; near-miss attempt (if any)
+                  // earns just the bonus.
+                  if (myAttempt) return bonus;
+                  return 0;
+                };
+                const yourDelta = roundDelta(meRole);
+                const themDelta = roundDelta(themRole);
+                const youGotPoint = yourDelta > 0;
+                const themGotPoint = themDelta > 0;
+                const yourPrev = ctx.you.score - yourDelta;
+                const theirPrev = ctx.them.score - themDelta;
                 return (
                   <>
                     <span className="relative">
@@ -393,7 +421,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                           className="score-delta float-up"
                           style={{ position: "absolute", marginLeft: 6 }}
                         >
-                          +1
+                          +{yourDelta}
                         </span>
                       ) : null}
                     </span>
@@ -408,7 +436,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                           className="score-delta float-up"
                           style={{ position: "absolute", marginLeft: 6 }}
                         >
-                          +1
+                          +{themDelta}
                         </span>
                       ) : null}
                     </span>

@@ -134,6 +134,7 @@ export function WordpinchUI({
         allowProperNouns: false,
         audioDefinitions: true,
         language: "en" as const,
+        lengthBonus: false,
       },
     [liveSettings]
   );

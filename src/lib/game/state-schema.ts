@@ -48,8 +48,12 @@ export const persistedGameStateSchema = z.object({
   round: z.number().int().min(0).max(1000),
   total: z.number().int().min(0).max(1000).optional(),
   scores: z.object({
-    host: z.number().int().min(0).max(10_000),
-    guest: z.number().int().min(0).max(10_000),
+    // Half-step granularity: with `settings.lengthBonus` enabled, every
+    // letter beyond `minWordLength` adds 0.5 — so scores can land on
+    // .5 increments. Without the setting, writers only add integers
+    // and the constraint is just defensive.
+    host: z.number().multipleOf(0.5).min(0).max(10_000),
+    guest: z.number().multipleOf(0.5).min(0).max(10_000),
   }),
   settings: z.object({
     rounds: z.number().int().min(1).max(50),
@@ -59,6 +63,10 @@ export const persistedGameStateSchema = z.object({
     allowProperNouns: z.boolean(),
     audioDefinitions: z.boolean(),
     language: z.literal("en"),
+    // Optional with default so settings written before this field
+    // existed (legacy rooms) still validate on the next /state POST.
+    // The default is also what `initialGameState` writes for new rooms.
+    lengthBonus: z.boolean().default(false),
   }),
   players: z.object({
     host: z.object({ name: NAME }).nullable(),

@@ -326,6 +326,22 @@ export async function lockPlayerLetter(opts: {
 type PendingAttempt = NonNullable<PersistedGameState["pendingResult"]>["attempts"][number];
 
 /**
+ * Length-bonus award per submitted word: 0.5 for every letter beyond
+ * `minWordLength`. Returns 0 when the bonus setting is disabled, when
+ * the word doesn't exceed the minimum, or when the word is missing.
+ * Centralized so the resolver and the near-miss path agree on the
+ * formula (and so changing it later is a one-file edit).
+ */
+function lengthBonus(
+  word: string | undefined,
+  settings: PersistedGameState["settings"]
+): number {
+  if (!settings.lengthBonus || !word) return 0;
+  const extra = word.length - settings.minWordLength;
+  return extra > 0 ? extra * 0.5 : 0;
+}
+
+/**
  * How long after a solo-winner result is committed we'll still accept the
  * loser's submission as a "near miss" (informational only — no score
  * change). Sized to comfortably cover the auto-advance window
@@ -400,10 +416,21 @@ async function recordNearMiss(opts: {
       timeMs: relativeMs(room.state, submittedAt),
     },
   ];
+  // Award the near-miss loser the length bonus (no base point — only
+  // the actual round winner gets the +1). With the setting off this is
+  // a no-op since lengthBonus() returns 0.
+  const bonus = lengthBonus(word, room.state.settings);
+  const nextScores =
+    bonus > 0
+      ? role === "host"
+        ? { ...room.state.scores, host: room.state.scores.host + bonus }
+        : { ...room.state.scores, guest: room.state.scores.guest + bonus }
+      : room.state.scores;
   const nextState: PersistedGameState = {
     ...room.state,
     result: { ...result, attempts: newAttempts },
     usedWords: newUsedWords,
+    scores: nextScores,
   };
   const admin = supabaseAdmin();
   const { data, error } = await admin
@@ -589,6 +616,7 @@ function computeFinalState(
 
   if (attempts.length === 1) {
     const a = attempts[0];
+    const winnerAward = 1 + lengthBonus(a.word, state.settings);
     return {
       ...base,
       phase: "result",
@@ -623,8 +651,8 @@ function computeFinalState(
       ],
       scores:
         a.by === "host"
-          ? { ...state.scores, host: state.scores.host + 1 }
-          : { ...state.scores, guest: state.scores.guest + 1 },
+          ? { ...state.scores, host: state.scores.host + winnerAward }
+          : { ...state.scores, guest: state.scores.guest + winnerAward },
     };
   }
 
@@ -642,6 +670,15 @@ function computeFinalState(
     ipa: a.phonetic,
     submittedAt: a.submittedAt,
   }));
+
+  // Per-side bonus from each player's own attempt. Sorted may contain
+  // 1+ attempts per side in theory, but in practice the resolver only
+  // sees one per side (recordAttempt is idempotent per role). Pick the
+  // first attempt per side for the bonus calc.
+  const hostAttempt = sorted.find((a) => a.by === "host");
+  const guestAttempt = sorted.find((a) => a.by === "guest");
+  const hostBonus = lengthBonus(hostAttempt?.word, state.settings);
+  const guestBonus = lengthBonus(guestAttempt?.word, state.settings);
 
   if (tieBehavior === "split") {
     return {
@@ -667,13 +704,17 @@ function computeFinalState(
         })),
       ],
       scores: {
-        host: state.scores.host + 1,
-        guest: state.scores.guest + 1,
+        host: state.scores.host + 1 + hostBonus,
+        guest: state.scores.guest + 1 + guestBonus,
       },
     };
   }
 
   if (tieBehavior === "nobody") {
+    // Per user decision: the length bonus still rewards both submitters
+    // here, just without the base win point. So a tied-nobody round
+    // with bonus enabled isn't necessarily 0/0 — the longer word still
+    // pays out something.
     return {
       ...base,
       phase: "result",
@@ -681,6 +722,21 @@ function computeFinalState(
         winner: "none",
         reason: "tied_nobody",
         submittedAt: Date.now(),
+        attempts: attemptsForDisplay,
+      },
+      usedWords: [
+        ...state.usedWords,
+        ...sorted.map((a) => ({
+          round: state.round,
+          word: a.word,
+          ipa: a.phonetic ?? "",
+          by: a.by,
+          timeMs: relativeMs(state, a.submittedAt),
+        })),
+      ],
+      scores: {
+        host: state.scores.host + hostBonus,
+        guest: state.scores.guest + guestBonus,
       },
     };
   }

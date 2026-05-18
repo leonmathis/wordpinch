@@ -23,6 +23,16 @@ export type PersistedGameState = {
     allowProperNouns: boolean;
     audioDefinitions: boolean;
     language: "en";
+    /**
+     * When true, every letter beyond `minWordLength` in a submitted word
+     * adds 0.5 to that player's score. Stacks with the base win point —
+     * a 7-letter win at min=5 yields 1 + (7-5)*0.5 = 2. Applies to
+     * losers too: a near-miss loser whose word qualified gets the
+     * bonus even without the base point. Pre-existing rooms (settings
+     * without this field) default to false via the API schema and
+     * client-side fallback.
+     */
+    lengthBonus: boolean;
   };
   players: {
     host: { name: string } | null;
@@ -145,6 +155,7 @@ export function initialGameState({
       allowProperNouns: false,
       audioDefinitions: true,
       language: "en",
+      lengthBonus: false,
     },
     players: {
       host: { name: hostName },

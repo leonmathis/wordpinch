@@ -220,6 +220,12 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
     },
     [actions]
   );
+  const commitLengthBonus = React.useCallback(
+    (v: boolean) => {
+      if (actions.ready) void actions.setSettings({ lengthBonus: v });
+    },
+    [actions]
+  );
   const [tieBehavior, setTieBehavior] = useOptimisticSetting(
     ctx.settings.tieBehavior,
     commitTie
@@ -231,6 +237,13 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
   const [audioDefinitions, setAudioDefinitions] = useOptimisticSetting(
     ctx.settings.audioDefinitions,
     commitAudio
+  );
+  // Legacy rooms (settings written before this field existed) read as
+  // `undefined` here — coerce to false so the Switch always renders a
+  // concrete boolean.
+  const [lengthBonus, setLengthBonus] = useOptimisticSetting(
+    ctx.settings.lengthBonus ?? false,
+    commitLengthBonus
   );
 
   const copy = async () => {
@@ -470,6 +483,18 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                   disabled={!isHost}
                   checked={audioDefinitions}
                   onCheckedChange={setAudioDefinitions}
+                />
+              </div>
+              <Separator />
+              <div className="settings-row">
+                <Label htmlFor="lobby-length-bonus" className={SETTINGS_LABEL}>
+                  +0.5 per extra letter
+                </Label>
+                <Switch
+                  id="lobby-length-bonus"
+                  disabled={!isHost}
+                  checked={lengthBonus}
+                  onCheckedChange={setLengthBonus}
                 />
               </div>
               <Separator />
