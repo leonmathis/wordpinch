@@ -46,6 +46,10 @@ export async function broadcastRoomState(
             topic: ROOM_CHANNEL(code),
             event: EVENT_STATE,
             payload,
+            // Must match the client channel's `config.private: true`. The
+            // HTTP API defaults to public; mismatched flags cause Realtime
+            // to silently drop the message at the receiver.
+            private: true,
           },
         ],
       }),
