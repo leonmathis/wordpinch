@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRoomByCode, isValidCode } from "@/lib/rooms";
+import { sanitizeStateForClient } from "@/lib/game/sanitize";
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -17,7 +18,11 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
     return NextResponse.json(
-      { code, state: room.state, language: room.language },
+      {
+        code,
+        state: sanitizeStateForClient(room.state),
+        language: room.language,
+      },
       {
         status: 200,
         headers: {

@@ -96,6 +96,15 @@ export async function getRoomByCode(
  * Replaces a room's state, verifying the caller is the host first.
  * Returns true on success, false if the host_id didn't match or the room
  * doesn't exist.
+ *
+ * Pick-letter preservation: locked letters are server-private during the
+ * `pick` phase (clients receive a sanitized state without them — see
+ * `sanitizeStateForClient`). A host calling `/state` while both phases are
+ * `pick` would otherwise round-trip the stripped state back and wipe the
+ * server's record, so when we're staying within `pick` we ignore the
+ * client-supplied letters and carry the server's forward. Transitions
+ * *into* or *out of* pick (startMatch, nextRound, lockPlayerLetter's
+ * reveal flip) are unaffected.
  */
 export async function updateRoomState(opts: {
   code: string;
@@ -104,9 +113,33 @@ export async function updateRoomState(opts: {
 }): Promise<boolean> {
   if (!isValidCode(opts.code)) return false;
   const admin = supabaseAdmin();
+
+  let stateToWrite: PersistedGameState = opts.state;
+  if (opts.state.phase === "pick") {
+    const current = await admin
+      .from("rooms")
+      .select("state")
+      .eq("code", opts.code)
+      .eq("host_id", opts.hostId)
+      .maybeSingle();
+    if (current.error) throw current.error;
+    if (!current.data) return false;
+    const currentState = current.data.state as PersistedGameState;
+    if (currentState.phase === "pick") {
+      stateToWrite = {
+        ...opts.state,
+        pick: {
+          ...opts.state.pick,
+          hostLetter: currentState.pick.hostLetter,
+          guestLetter: currentState.pick.guestLetter,
+        },
+      };
+    }
+  }
+
   const { data, error } = await admin
     .from("rooms")
-    .update({ state: opts.state })
+    .update({ state: stateToWrite })
     .eq("code", opts.code)
     .eq("host_id", opts.hostId)
     .select("code")

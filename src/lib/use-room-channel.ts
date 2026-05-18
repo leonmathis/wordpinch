@@ -92,8 +92,14 @@ export function useRoomChannel(opts: UseRoomChannelOpts): {
     const sessionId = crypto.randomUUID();
     let cancelled = false;
 
+    // `private: true` enforces Realtime authorization on `realtime.messages`
+    // so the publishable-key browser client can only receive broadcasts and
+    // track its own presence — it cannot publish forged `state` events on
+    // behalf of the server. The HTTP-API server publisher uses the secret
+    // key (service_role), which bypasses RLS and continues to work. See
+    // migration `20260518000000_lock_realtime_room_channel.sql`.
     const channel: RealtimeChannel = supabase.channel(topic, {
-      config: { presence: { key: sessionId } },
+      config: { presence: { key: sessionId }, private: true },
     });
 
     channel.on(

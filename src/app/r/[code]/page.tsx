@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { WordpinchUI } from "@/components/game/wordpinch-ui";
 import { getRoomByCode, isValidCode } from "@/lib/rooms";
+import { sanitizeStateForClient } from "@/lib/game/sanitize";
 import type { GamePhase } from "@/lib/game/types";
 
 const VALID_PHASES = new Set<GamePhase>([
@@ -58,7 +59,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
     <WordpinchUI
       initialPhase={phase}
       roomCode={code}
-      initialState={room.state}
+      initialState={sanitizeStateForClient(room.state)}
       showReconnect={sp.reconnect === "1"}
     />
   );

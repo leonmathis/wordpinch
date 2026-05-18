@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PersistedGameState } from "./game/state";
+import { sanitizeStateForClient } from "./game/sanitize";
 import { EVENT_STATE, ROOM_CHANNEL, type RoomBroadcastPayload } from "./realtime";
 
 /**
@@ -26,7 +27,10 @@ export async function broadcastRoomState(
     return;
   }
 
-  const payload: RoomBroadcastPayload = { state, sentAt: Date.now() };
+  const payload: RoomBroadcastPayload = {
+    state: sanitizeStateForClient(state),
+    sentAt: Date.now(),
+  };
 
   try {
     const res = await fetch(`${url}/realtime/v1/api/broadcast`, {
