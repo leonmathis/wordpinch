@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { PersistedGameState } from "./game/state";
 
 export type ResolvedRole = "host" | "guest" | "spectator" | null;
 
@@ -17,6 +18,14 @@ type Opts = {
   clientId: string;
   /** Display name; used by /join if the caller is claiming the guest slot. */
   name: string;
+  /**
+   * Optional sink for the post-claim state returned by /join. Wired to
+   * `useRoomChannel`'s `applyState` so a fresh guest's `liveState`
+   * reflects their own join *without* depending on the realtime
+   * broadcast, which sometimes arrives during the channel re-subscribe
+   * that fires when `role` flips from `null` to "guest" and is missed.
+   */
+  applyState?: (state: PersistedGameState) => void;
 };
 
 /**
@@ -34,8 +43,16 @@ type Opts = {
  * gets set. This avoids the setState-in-effect lint while still handling
  * the post-hydration transition correctly.
  */
-export function useMyRole({ code, clientId, name }: Opts): State {
+export function useMyRole({ code, clientId, name, applyState }: Opts): State {
   const [role, setRole] = React.useState<ResolvedRole>(null);
+  // Keep `applyState` reachable inside the async resolver without
+  // listing it in the effect deps — `applyState` is React's setState
+  // (stable identity), but listing it would force a re-run if the
+  // caller forgot to memoize. Ref avoids that footgun.
+  const applyStateRef = React.useRef(applyState);
+  React.useEffect(() => {
+    applyStateRef.current = applyState;
+  });
 
   React.useEffect(() => {
     if (!code || !clientId) return;
@@ -75,8 +92,19 @@ export function useMyRole({ code, clientId, name }: Opts): State {
         });
         if (cancelled) return;
         if (joinRes.ok) {
-          const joinData = (await joinRes.json()) as { role?: string };
+          const joinData = (await joinRes.json()) as {
+            role?: string;
+            state?: PersistedGameState;
+          };
           if (joinData.role === "host" || joinData.role === "guest") {
+            // Apply the post-claim state directly to the channel's
+            // state cache. This guarantees the guest sees their own
+            // join (name, players.guest slot filled) even if the
+            // accompanying realtime broadcast is missed during the
+            // channel resubscribe triggered by `role` changing.
+            if (joinData.state && applyStateRef.current) {
+              applyStateRef.current(joinData.state);
+            }
             setRole(joinData.role);
             return;
           }

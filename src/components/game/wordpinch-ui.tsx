@@ -58,10 +58,24 @@ export function WordpinchUI({
   // resolving, treat the caller as "not the host" so we don't briefly show
   // host-only UI (Start, settings edit, etc.) to a joining guest.
   const channelCode = roomCode && clientId ? roomCode : null;
+  // `useMyRole` needs to apply the post-join state to `liveState`, but
+  // `applyState` itself comes from `useRoomChannel` which is called
+  // *after* `useMyRole`. Bridge via a ref + stable wrapper: the wrapper
+  // closes over a ref that we populate once `useRoomChannel` returns.
+  const applyStateRef = React.useRef<
+    ((state: PersistedGameState) => void) | null
+  >(null);
+  const applyStateBridge = React.useCallback(
+    (state: PersistedGameState) => {
+      applyStateRef.current?.(state);
+    },
+    []
+  );
   const { role } = useMyRole({
     code: channelCode,
     clientId,
     name: storedName,
+    applyState: applyStateBridge,
   });
 
   const {
@@ -77,6 +91,14 @@ export function WordpinchUI({
     role: role ?? undefined,
     initialState,
   });
+
+  // Populate the bridge ref so `applyStateBridge` (passed to
+  // `useMyRole` above) forwards to the real channel state setter. The
+  // assignment effect runs after `useRoomChannel` has produced
+  // `applyState`, well before `useMyRole`'s async /join chain resolves.
+  React.useEffect(() => {
+    applyStateRef.current = applyState;
+  }, [applyState]);
 
   // Derive opponent presence from the channel's presence sync. Default to
   // online until the first sync arrives — `presence` is `[]` during the
@@ -330,13 +352,14 @@ export function WordpinchUI({
       {/* Spectator routing: any client whose role resolved to 'spectator'
        *  sees the read-only SpectatorPhase regardless of the underlying
        *  game phase, which switches its content based on ctx.phase.
-       *  AnimatePresence with mode="popLayout" overlaps exit + enter
-       *  (halves perceived transition time from ~440 ms to ~220 ms)
-       *  while popping the exiting child out of layout so flex-1
-       *  doesn't briefly split the column 50/50. Keys are unique per
-       *  (phase, round) so the same phase across two rounds (e.g. pick)
-       *  still animates. */}
-      <AnimatePresence mode="popLayout" initial={false}>
+       *  AnimatePresence is in `mode="wait"` (exit-then-enter) so two
+       *  phases of different heights never co-exist mid-transition —
+       *  `popLayout` overlapped them with each phase centering its
+       *  content separately, which looked visually noisy. Total swap
+       *  time is kept ~260 ms by the short PhaseShell durations so it
+       *  still feels snappy. Keys are unique per (phase, round) so the
+       *  same phase across two rounds (e.g. pick) still animates. */}
+      <AnimatePresence mode="wait" initial={false}>
         {role === "spectator" && phase !== "landing" ? (
           <PhaseShell key={`spec-${phase}-${round}`}>
             <SpectatorPhase ctx={ctx} />

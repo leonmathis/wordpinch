@@ -1,5 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { claimGuestSlot, isValidCode } from "@/lib/rooms";
+import { sanitizeStateForClient } from "@/lib/game/sanitize";
 import { broadcastRoomState } from "@/lib/realtime-server";
 
 const UUID_REGEX =
@@ -67,8 +68,13 @@ export async function POST(request: Request, { params }: Params) {
         await broadcastRoomState(code, result.state);
       });
     }
+    // Return the post-claim state in the body so the joining client can
+    // seed its `liveState` synchronously and avoid racing the `after()`
+    // broadcast. Without this, the guest's channel subscription
+    // sometimes finishes after the broadcast fires, leaving their own
+    // name absent from the lobby until they refresh.
     return NextResponse.json(
-      { role: result.role },
+      { role: result.role, state: sanitizeStateForClient(result.state) },
       { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {

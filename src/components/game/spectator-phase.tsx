@@ -14,8 +14,15 @@ const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
 
 function Banner() {
+  // On narrow screens the theme / sound / share icons in `TopChrome` sit
+  // in the same row as `top: 12`, so the banner used to slide *under*
+  // them visually (banner has lower z-index). The `sm` breakpoint
+  // (640 px) flips us back into the desktop-centered position where
+  // there's room either side of the icons.
   return (
-    <div className="absolute left-0 right-0 z-[3] flex justify-center px-4 pointer-events-none" style={{ top: 12 }}>
+    <div
+      className="absolute left-0 right-0 z-[3] flex justify-center px-4 pointer-events-none top-[60px] sm:top-3"
+    >
       <Alert className="max-w-sm backdrop-blur-sm bg-background/85 shadow-sm">
         <Eye />
         <AlertDescription>
@@ -290,7 +297,11 @@ export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
   return (
     <>
       <Banner />
-      <div className="wp-body" style={{ paddingTop: 76 }}>
+      {/* `pt-[120px]` on narrow viewports clears the banner that's been
+       *  pushed to `top: 60` to avoid overlapping the chrome icons; the
+       *  `sm:pt-[76px]` falls back to the desktop value where the banner
+       *  sits in the icons row. */}
+      <div className="wp-body pt-[120px] sm:pt-[76px]">
         {ctx.phase === "lobby" ? <SpectatorLobby ctx={ctx} /> : null}
         {ctx.phase === "pick" ? <SpectatorPick ctx={ctx} /> : null}
         {ctx.phase === "reveal" ? <SpectatorReveal ctx={ctx} /> : null}

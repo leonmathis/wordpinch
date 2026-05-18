@@ -143,6 +143,17 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     if (a.ready && ctx.meIsHost) void a.timeoutRound();
   });
 
+  // One-shot urgency pulse the moment the clock crosses from 6 → 5.
+  // `prevLeftRef` keeps the comparison stable across renders so the
+  // pulse doesn't replay if React re-renders mid-second; `onAnimationEnd`
+  // clears the class so the CSS animation only fires once per round.
+  const [timerPulse, setTimerPulse] = React.useState(false);
+  const prevLeftRef = React.useRef(left);
+  React.useEffect(() => {
+    if (prevLeftRef.current > 5 && left === 5) setTimerPulse(true);
+    prevLeftRef.current = left;
+  }, [left]);
+
   // 10 s grace period: if the opponent stays disconnected, the host's
   // client awards the round to the player still here. Guests don't run
   // this — they're either the disappearing player (no client to fire)
@@ -213,9 +224,13 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       return;
     }
     setSubmitting(true);
-    // Tell the parent we're submitting so it holds the race-phase view
-    // even if a phase=result broadcast arrives before our submit lands.
-    ctx.setSubmitInFlight(true);
+    // `submitInFlight` (the parent's "show settling overlay" signal) is
+    // *not* set here — only the local `submitting` flag, which flips the
+    // button text to "Submitting…" without leaving the race phase. We
+    // raise `submitInFlight` only AFTER the dictionary `/validate` has
+    // returned a valid word; otherwise a rejected word would flash the
+    // settling overlay in and out, which reads as a layout glitch.
+    let raisedInFlight = false;
     try {
       const res = await fetch("/api/words/validate", {
         method: "POST",
@@ -235,6 +250,11 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
         triggerReject();
         return;
       }
+      // Word is real — commit to the settling overlay before posting
+      // to `/submit`, so the result phase mounts via the settling
+      // crossfade instead of a race→result jump.
+      ctx.setSubmitInFlight(true);
+      raisedInFlight = true;
       if (ctx.actions.ready) {
         await ctx.actions.submitWord(lower, {
           phonetic: data.phonetic,
@@ -247,7 +267,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       triggerReject();
     } finally {
       setSubmitting(false);
-      ctx.setSubmitInFlight(false);
+      if (raisedInFlight) ctx.setSubmitInFlight(false);
     }
   };
 
@@ -282,7 +302,8 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           <div className="flex items-center justify-between" style={{ marginBottom: 22 }}>
             <LettersDisplay start={A} end={B} gaps={gaps} />
             <div
-              className="font-mono tabular-nums"
+              className={`font-mono tabular-nums ${timerPulse ? "timer-pulse" : ""}`}
+              onAnimationEnd={() => setTimerPulse(false)}
               style={{
                 fontSize: 24,
                 color: left <= 5 ? "var(--destructive)" : "var(--foreground)",
@@ -332,25 +353,37 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
             </Button>
           </form>
 
-          <div className="flex items-center justify-between" style={{ marginTop: 14 }}>
+          <div
+            className="flex items-center justify-between gap-3"
+            style={{ marginTop: 14 }}
+          >
             {/* LEFT — opponent indicator, always about the OTHER player.
              *  Doesn't change when the local player submits (was a bug
              *  to flip it: same row reading "Submitted" alongside the
              *  opponent's avatar looked like the opponent had
-             *  submitted). */}
-            <div className="t-label flex items-center" style={{ gap: 8 }}>
+             *  submitted). `min-w-0` + `truncate` lets long names
+             *  ellipsize instead of pushing the row to two lines. */}
+            <div
+              className="t-label flex items-center min-w-0"
+              style={{ gap: 8 }}
+            >
               <Avatar name={ctx.them.name} size={18} />
-              <span>{ctx.them.name} is typing</span>
+              <span className="truncate">{ctx.them.name} is typing</span>
               <span
-                className="wp-dot pulse-soft"
+                className="wp-dot pulse-soft shrink-0"
                 style={{ background: "var(--muted-foreground)" }}
               />
             </div>
-            {/* RIGHT — local-side hint. Flips to submission feedback
-             *  while waiting for the resolver. */}
-            <div className="t-label">
+            {/* RIGHT — local-side hint. Hidden on narrow viewports
+             *  where the "Enter to submit" affordance doesn't apply
+             *  anyway (touch users tap the button) and the row would
+             *  otherwise wrap to two lines next to the opponent
+             *  indicator. The submit button's own label flips to
+             *  "Submitting…" while the request is in flight, so
+             *  there's no lost feedback. */}
+            <div className="t-label hidden sm:block text-right">
               {submitting
-                ? "Submitted ✓ — waiting for result"
+                ? "Checking your word…"
                 : `min ${ctx.minWordLength} letters · Enter to submit`}
             </div>
           </div>

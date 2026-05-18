@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { motion, useReducedMotion } from "motion/react";
 import type { GameCtx } from "@/lib/game/types";
 import { Button } from "@/components/ui/button";
 import { Play, ArrowRight } from "lucide-react";
@@ -11,6 +12,62 @@ import { Avatar } from "./avatar";
 type SuggestResponse = {
   suggestions: string[];
 };
+
+/**
+ * Per-character entrance for the round-winning word. Mirrors the room
+ * code stagger in the lobby — each letter pops in with a slight scale +
+ * y-rise, anchor letters (first / last) keep their bolder styling via
+ * the `.anchor` class. Drops to a single opacity fade for viewers with
+ * `prefers-reduced-motion` set.
+ */
+function StaggeredResultWord({
+  word,
+  charDelay = 0.04,
+  duration = 0.42,
+}: {
+  word: string;
+  charDelay?: number;
+  duration?: number;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.h1
+      className="result-word"
+      aria-label={word}
+      initial="initial"
+      animate="animate"
+      variants={{
+        initial: {},
+        animate: { transition: { staggerChildren: reduce ? 0 : charDelay } },
+      }}
+    >
+      {word.split("").map((c, i) => {
+        const isAnchor = i === 0 || i === word.length - 1;
+        // Match the original casing rule: anchors carry the word's
+        // own case (uppercase from the server), interior chars
+        // lowercase for the playful display.
+        const display = isAnchor ? c : c.toLowerCase();
+        return (
+          <motion.span
+            key={`${word}-${i}`}
+            className={isAnchor ? "anchor" : undefined}
+            aria-hidden
+            variants={{
+              initial: reduce
+                ? { opacity: 0 }
+                : { opacity: 0, y: 10, scale: 0.85 },
+              animate: { opacity: 1, y: 0, scale: 1 },
+            }}
+            transition={{ duration, ease: [0.16, 1, 0.3, 1] }}
+            style={{ display: "inline-block" }}
+          >
+            {display}
+          </motion.span>
+        );
+      })}
+    </motion.h1>
+  );
+}
 
 function speakFallback(word: string) {
   if (!word || typeof window === "undefined") return;
@@ -112,12 +169,12 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   // Side-by-side renders for sim ties AND near-misses.
   const hasSideBySide = sideBySideAttempts.length >= 2 && (isSplit || isNearMiss);
 
-  // Fetch suggestions whenever the round ended without a winning word:
-  // a real timeout (no submissions or both clocks ran out), a sim-tie
-  // with tieBehavior=nobody, or a timeout-nobody. In every case the
-  // players see "here's what would have worked" so the round doesn't
-  // feel like dead time.
-  const shouldFetchSuggestions = isNone;
+  // Fetch suggestions for every result that ended this round — win,
+  // lose, draw, timeout — so both players always see a handful of
+  // alternative words that would have worked. The one exception is
+  // `replay_pending`, where the same letters are about to come back
+  // around and the suggestions would just spoil the retry.
+  const shouldFetchSuggestions = !isReplayPending;
   React.useEffect(() => {
     if (!shouldFetchSuggestions) return;
     const start = ctx.letterStart?.toLowerCase();
@@ -183,7 +240,6 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   ]);
 
   const word = ctx.word;
-  const mid = word.slice(1, -1).toLowerCase();
   // Fallback definitions only render when we somehow lost the API result —
   // never used in normal play, but keeps the UI from showing blank.
   const FALLBACK_DEFS = [
@@ -226,7 +282,19 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                *  side-by-side using the attempts captured by the resolver.
                *  Timeout-split has no attempts → falls through to the
                *  suggestions branch below. */}
-              <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 mt-2 items-start sm:items-center sm:justify-center">
+              <motion.div
+                className="flex flex-col sm:flex-row gap-6 sm:gap-10 mt-2 items-start sm:items-center sm:justify-center"
+                initial="initial"
+                animate="animate"
+                variants={{
+                  initial: {},
+                  // Columns stagger 80 ms apart so the eye reads
+                  // attempt[0] (the winner) first, then the
+                  // near-miss / co-tied attempt. Skipped under
+                  // reduced motion via the column variant below.
+                  animate: { transition: { staggerChildren: 0.08 } },
+                }}
+              >
                 {sideBySideAttempts.map((a, idx) => {
                   const playerName =
                     a.by === "host" ? ctx.hostName : ctx.guestName;
@@ -235,11 +303,24 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                   // grace window. Dim the loser column for visual hierarchy.
                   const isLoserInNearMiss = isNearMiss && idx === 1;
                   return (
-                    <div
+                    <motion.div
                       key={`${a.by}-${a.word}`}
                       className="flex flex-col items-center"
                       style={{
                         opacity: isLoserInNearMiss ? 0.55 : 1,
+                      }}
+                      variants={{
+                        initial: { opacity: 0, y: 10 },
+                        animate: {
+                          // Re-apply the dim-loser opacity here so the
+                          // variant doesn't override it back to 1 mid-fade.
+                          opacity: isLoserInNearMiss ? 0.55 : 1,
+                          y: 0,
+                        },
+                      }}
+                      transition={{
+                        duration: 0.4,
+                        ease: [0.16, 1, 0.3, 1],
                       }}
                     >
                       <div
@@ -267,10 +348,10 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                           {a.ipa}
                         </span>
                       ) : null}
-                    </div>
+                    </motion.div>
                   );
                 })}
-              </div>
+              </motion.div>
               {isReplayPending ? (
                 <div
                   className="t-label text-center"
@@ -283,15 +364,12 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
           ) : isForfeit ? (
             // Forfeit: opponent stayed disconnected through the 10s grace
             // period. The title above (X wins round Y by forfeit) tells
-            // the whole story — no word was played, no suggestions.
+            // the whole story — no word was played. Suggestions still
+            // render below this branch.
             null
           ) : !isNone && !isSplit ? (
             <>
-              <h1 className="result-word">
-                <span className="anchor">{word[0]}</span>
-                <span>{mid}</span>
-                <span className="anchor">{word[word.length - 1]}</span>
-              </h1>
+              <StaggeredResultWord word={word} />
 
               <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
                 {ctx.ipa ? (
@@ -326,10 +404,22 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 ))}
               </div>
             </>
-          ) : (
-            <div style={{ marginTop: 20 }}>
+          ) : null}
+
+          {/* Suggestions: rendered for every non-replay outcome (win,
+           *  lose, sim-tie, near-miss, timeout, forfeit) so the players
+           *  always see a handful of alternative words that would have
+           *  worked. Headline reads "Other words..." when there *is* a
+           *  played word above this block, plain "Words..." otherwise,
+           *  so the grammar lands for both contexts. */}
+          {shouldFetchSuggestions ? (
+            <div style={{ marginTop: 28 }}>
               <div className="t-label-up" style={{ marginBottom: 8 }}>
-                Words you could have played
+                {isSingleWinner && !isForfeit
+                  ? "Other words that worked"
+                  : hasSideBySide
+                  ? "Other words that worked"
+                  : "Words you could have played"}
               </div>
               {suggestions === null ? (
                 <div className="t-label">
@@ -356,7 +446,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 </div>
               )}
             </div>
-          )}
+          ) : null}
 
           <div className="flex items-center justify-between" style={{ marginTop: 28 }}>
             <div

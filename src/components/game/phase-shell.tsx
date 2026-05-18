@@ -9,8 +9,15 @@ import { motion, useReducedMotion } from "motion/react";
  * that wp-root expects of its child (flex column, flex-1) so TopChrome's
  * absolute positioning and wp-body's flex-1 keep working.
  *
- * Respects `prefers-reduced-motion` — falls back to a snappy opacity-only
- * crossfade.
+ * Uses `mode="wait"` (sequential) in the parent, so this shell only ever
+ * animates a single phase at a time — no overlap, no two centered
+ * containers fighting for the same vertical real estate. Durations are
+ * kept short (130/110 ms in/out) so the total swap lands around 240 ms,
+ * matching the perceived snappiness of the popLayout overlap without
+ * its visual stacking.
+ *
+ * Respects `prefers-reduced-motion` — falls back to an even shorter
+ * opacity-only crossfade.
  */
 export function PhaseShell({
   children,
@@ -21,11 +28,11 @@ export function PhaseShell({
   return (
     <motion.div
       className="relative flex-1 flex flex-col w-full"
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+      exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4 }}
       transition={{
-        duration: reduce ? 0.12 : 0.22,
+        duration: reduce ? 0.1 : 0.13,
         ease: [0.16, 1, 0.3, 1],
       }}
     >
