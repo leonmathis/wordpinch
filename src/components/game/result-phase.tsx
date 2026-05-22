@@ -112,9 +112,14 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     actionsRef.current = ctx.actions;
   });
   // The auto-advance is shorter for replay_pending (just enough to read
-  // both attempts) and fires `replayRound` instead of `nextRound`.
-  const advanceMs = ctx.resultReason === "replay_pending" ? 4200 : 5200;
-  const fireReplay = ctx.resultReason === "replay_pending";
+  // both attempts) and fires `replayRound` instead of `nextRound`. Same
+  // applies when the round timed out with tieBehavior='replay' — neither
+  // player submitted, the round re-runs after a brief look at the
+  // suggested-words screen.
+  const isTimeoutReplay =
+    ctx.resultReason === "timeout" && ctx.settings.tieBehavior === "replay";
+  const fireReplay = ctx.resultReason === "replay_pending" || isTimeoutReplay;
+  const advanceMs = fireReplay ? 4200 : 5200;
   React.useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {

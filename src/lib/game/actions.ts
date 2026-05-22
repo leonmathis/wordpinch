@@ -230,11 +230,19 @@ export function useRoomActions(opts: {
         // outcome with the "out of time" suffix.
         const tieBehavior = state.settings.tieBehavior;
         if (tieBehavior === "replay") {
+          // Mirror the 'nobody' branch — park on the result screen so
+          // both players see the "out of time" header and a set of
+          // suggested words that would have worked. ResultPhase fires
+          // `replayRound` after the advance bar fills, because
+          // tieBehavior is 'replay'.
           await postState({
             ...state,
-            phase: "pick",
-            pick: { firstPicker: state.pick.firstPicker },
-            result: undefined,
+            phase: "result",
+            result: {
+              winner: "none",
+              reason: "timeout",
+              submittedAt: Date.now(),
+            },
           });
           return;
         }
@@ -287,9 +295,13 @@ export function useRoomActions(opts: {
 
       replayRound: async () => {
         if (!isHost || !state) return;
-        // Only valid out of a replay_pending result. Other callers would
-        // just re-roll the round needlessly.
-        if (state.result?.reason !== "replay_pending") return;
+        // Valid out of a replay_pending result (sim tie + replay) or a
+        // timeout when tieBehavior is 'replay' (neither submitted, round
+        // re-runs). Anything else would re-roll the round needlessly.
+        const reason = state.result?.reason;
+        const isTimeoutReplay =
+          reason === "timeout" && state.settings.tieBehavior === "replay";
+        if (reason !== "replay_pending" && !isTimeoutReplay) return;
         await postState({
           ...state,
           phase: "pick",
