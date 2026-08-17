@@ -34,6 +34,29 @@ const attemptSchema = z.object({
   submittedAt: z.number().int().nonnegative(),
 });
 
+/**
+ * Settings sub-schema, extracted so `POST /api/rooms/[code]/settings` can
+ * validate a *partial* patch with the same bounds the full-state writer
+ * enforces. Keeping one definition means the lobby controls, the patch
+ * endpoint and the full-state endpoint can never drift apart.
+ */
+export const settingsSchema = z.object({
+  rounds: z.number().int().min(1).max(50),
+  roundTimerSec: z.number().int().min(5).max(600),
+  minWordLength: z.number().int().min(2).max(20),
+  tieBehavior: z.enum(["replay", "split", "nobody"]),
+  allowProperNouns: z.boolean(),
+  audioDefinitions: z.boolean(),
+  language: z.literal("en"),
+  // Optional with default so settings written before this field
+  // existed (legacy rooms) still validate on the next /state POST.
+  // The default is also what `initialGameState` writes for new rooms.
+  lengthBonus: z.boolean().default(false),
+});
+
+/** Any subset of settings — the body shape of the settings patch endpoint. */
+export const settingsPatchSchema = settingsSchema.partial();
+
 export const persistedGameStateSchema = z.object({
   phase: z.enum([
     "landing",
@@ -55,19 +78,7 @@ export const persistedGameStateSchema = z.object({
     host: z.number().multipleOf(0.5).min(0).max(10_000),
     guest: z.number().multipleOf(0.5).min(0).max(10_000),
   }),
-  settings: z.object({
-    rounds: z.number().int().min(1).max(50),
-    roundTimerSec: z.number().int().min(5).max(600),
-    minWordLength: z.number().int().min(2).max(20),
-    tieBehavior: z.enum(["replay", "split", "nobody"]),
-    allowProperNouns: z.boolean(),
-    audioDefinitions: z.boolean(),
-    language: z.literal("en"),
-    // Optional with default so settings written before this field
-    // existed (legacy rooms) still validate on the next /state POST.
-    // The default is also what `initialGameState` writes for new rooms.
-    lengthBonus: z.boolean().default(false),
-  }),
+  settings: settingsSchema,
   players: z.object({
     host: z.object({ name: NAME }).nullable(),
     guest: z.object({ name: NAME }).nullable(),
@@ -102,6 +113,16 @@ export const persistedGameStateSchema = z.object({
     })
     .optional(),
   raceStartedAt: z.number().int().nonnegative().optional(),
+  rounds: z
+    .array(
+      z.object({
+        round: z.number().int().min(0).max(1000),
+        winner: z.enum(["host", "guest", "split", "none"]),
+        reason: z.enum(["timeout", "tied_nobody", "forfeit"]).optional(),
+      })
+    )
+    .max(1000)
+    .optional(),
   usedWords: z
     .array(
       z.object({

@@ -93,9 +93,18 @@ export async function getRoomByCode(
 }
 
 /**
- * Replaces a room's state, verifying the caller is the host first.
- * Returns true on success, false if the host_id didn't match or the room
- * doesn't exist.
+ * Replaces a room's state, verifying the caller holds one of the room's two
+ * player slots first. Returns true on success, false if the actor matched
+ * neither slot or the room doesn't exist.
+ *
+ * Why either slot and not just the host: every phase transition (reveal →
+ * race, timeout, next round, forfeit) is driven by a client timer, and
+ * gating them on the host alone meant a host who closed their tab froze the
+ * guest's game permanently — countdown stuck, no exit. The guest's client
+ * only *takes* the referee role while the host is absent from presence
+ * (see `canReferee` in WordpinchUI), but the server can't observe presence,
+ * so authorization here is "either seated player". That's the same trust
+ * level the host already had; spectators still can't write.
  *
  * Pick-letter preservation: locked letters are server-private during the
  * `pick` phase (clients receive a sanitized state without them — see
@@ -117,11 +126,14 @@ export async function getRoomByCode(
  */
 export async function updateRoomState(opts: {
   code: string;
-  hostId: string;
+  actorId: string;
   state: PersistedGameState;
 }): Promise<boolean> {
   if (!isValidCode(opts.code)) return false;
   const admin = supabaseAdmin();
+  // PostgREST `or` filter — the actor must hold one of the two player slots.
+  // `actorId` is UUID-validated by the route before it reaches this point.
+  const actorFilter = `host_id.eq.${opts.actorId},guest_id.eq.${opts.actorId}`;
 
   let stateToWrite: PersistedGameState = opts.state;
   if (opts.state.phase === "pick" || opts.state.phase === "matchend") {
@@ -129,7 +141,7 @@ export async function updateRoomState(opts: {
       .from("rooms")
       .select("state")
       .eq("code", opts.code)
-      .eq("host_id", opts.hostId)
+      .or(actorFilter)
       .maybeSingle();
     if (current.error) throw current.error;
     if (!current.data) return false;
@@ -156,12 +168,70 @@ export async function updateRoomState(opts: {
     .from("rooms")
     .update({ state: stateToWrite })
     .eq("code", opts.code)
-    .eq("host_id", opts.hostId)
+    .or(actorFilter)
     .select("code")
     .maybeSingle();
 
   if (error) throw error;
   return data !== null;
+}
+
+export type SettingsResult =
+  | { ok: true; state: PersistedGameState }
+  | { ok: false; reason: "not_found" | "forbidden" | "not_in_lobby" };
+
+/**
+ * Host-only partial update of `state.settings`.
+ *
+ * Exists because the client used to patch settings by POSTing its whole
+ * `liveState` snapshot to /state. Two lobby controls touched within the
+ * broadcast round-trip (~1 s) therefore raced: the second POST carried the
+ * pre-first-change snapshot and silently reverted it. Here the read →
+ * merge → write happens inside one request against the live row, so the
+ * only value a patch can carry is the key it actually changed.
+ *
+ * Restricted to the lobby phase: settings are lobby-only in the UI, and
+ * mid-match changes would desync the round the players are already in.
+ */
+export async function updateRoomSettings(opts: {
+  code: string;
+  hostId: string;
+  patch: Partial<PersistedGameState["settings"]>;
+}): Promise<SettingsResult> {
+  if (!isValidCode(opts.code)) return { ok: false, reason: "not_found" };
+  const admin = supabaseAdmin();
+
+  const { data, error } = await admin
+    .from("rooms")
+    .select("host_id, state")
+    .eq("code", opts.code)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { ok: false, reason: "not_found" };
+  if ((data.host_id as string) !== opts.hostId) {
+    return { ok: false, reason: "forbidden" };
+  }
+
+  const currentState = data.state as PersistedGameState;
+  if (currentState.phase !== "lobby") {
+    return { ok: false, reason: "not_in_lobby" };
+  }
+
+  const nextState: PersistedGameState = {
+    ...currentState,
+    settings: { ...currentState.settings, ...opts.patch },
+  };
+
+  const written = await admin
+    .from("rooms")
+    .update({ state: nextState })
+    .eq("code", opts.code)
+    .eq("host_id", opts.hostId)
+    .select("code")
+    .maybeSingle();
+  if (written.error) throw written.error;
+  if (!written.data) return { ok: false, reason: "not_found" };
+  return { ok: true, state: nextState };
 }
 
 export type ClaimResult =
@@ -249,7 +319,6 @@ export type LockLetterResult =
         | "not_found"
         | "forbidden"
         | "wrong_phase"
-        | "already_locked"
         | "concurrent_update";
     };
 
@@ -303,9 +372,12 @@ export async function lockPlayerLetter(opts: {
     const otherKey: "hostLetter" | "guestLetter" =
       role === "host" ? "guestLetter" : "hostLetter";
 
-    if (room.state.pick[myKey]) {
-      return { ok: false, reason: "already_locked" };
-    }
+    // Re-locking your own slot is allowed while the round is still in
+    // `pick`: letters are server-private until both are in, so changing
+    // your mind before the reveal leaks nothing and gives the player the
+    // "undo" this screen otherwise lacked. Once the opponent locks, the
+    // same write flips the phase to `reveal` and the phase guard above
+    // rejects any further change.
 
     const observedOther = room.state.pick[otherKey];
     const nextPick = { ...room.state.pick, [myKey]: letter };
@@ -382,6 +454,20 @@ function relativeMs(
   return state.raceStartedAt
     ? Math.max(0, submittedAt - state.raceStartedAt)
     : undefined;
+}
+
+/**
+ * Records how a round ended, replacing any prior entry for the same round
+ * (a replayed round resolves more than once). The match-end summary reads
+ * this to label rounds that produced no word — a forfeit or a timeout used
+ * to render as two blank cells beside a score that had quietly gone up.
+ */
+function appendRoundOutcome(
+  state: PersistedGameState,
+  outcome: NonNullable<PersistedGameState["rounds"]>[number]
+): NonNullable<PersistedGameState["rounds"]> {
+  const existing = state.rounds ?? [];
+  return [...existing.filter((r) => r.round !== outcome.round), outcome];
 }
 
 /**
@@ -654,6 +740,7 @@ function computeFinalState(
           },
         ],
       },
+      rounds: appendRoundOutcome(state, { round: state.round, winner: a.by }),
       usedWords: [
         ...state.usedWords,
         {
@@ -708,6 +795,10 @@ function computeFinalState(
         submittedAt: first.submittedAt,
         attempts: attemptsForDisplay,
       },
+      rounds: appendRoundOutcome(state, {
+        round: state.round,
+        winner: "split",
+      }),
       usedWords: [
         ...state.usedWords,
         ...sorted.map((a) => ({
@@ -739,6 +830,11 @@ function computeFinalState(
         submittedAt: Date.now(),
         attempts: attemptsForDisplay,
       },
+      rounds: appendRoundOutcome(state, {
+        round: state.round,
+        winner: "none",
+        reason: "tied_nobody",
+      }),
       usedWords: [
         ...state.usedWords,
         ...sorted.map((a) => ({

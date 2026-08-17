@@ -6,7 +6,12 @@ import type { GameCtx, GamePhase } from "@/lib/game/types";
 import type { PersistedGameState } from "@/lib/game/state";
 import type { UsedWord } from "@/lib/game/types";
 import { useRoomActions } from "@/lib/game/actions";
-import { useStoredBool, useClientId, useStoredString } from "@/lib/hooks";
+import {
+  useStoredBool,
+  useClientId,
+  useStoredString,
+  useSustained,
+} from "@/lib/hooks";
 import { useRoomChannel } from "@/lib/use-room-channel";
 import { useMyRole } from "@/lib/use-my-role";
 import { AnimatePresence } from "motion/react";
@@ -18,10 +23,18 @@ import { RacePhase } from "./race-phase";
 import { ResultPhase } from "./result-phase";
 import { MatchEnd } from "./match-end";
 import { SpectatorPhase } from "./spectator-phase";
-import { ReconnectBanner } from "./reconnect-banner";
+import { ReconnectBanner, RoleErrorBanner } from "./reconnect-banner";
 import { PhaseShell } from "./phase-shell";
 import { SettlingPhase } from "./settling-phase";
 import { TopChrome } from "./top-chrome";
+
+/**
+ * How long the host must be missing from presence before the guest's client
+ * takes over as referee. Long enough that a page refresh or a brief network
+ * blip doesn't pass control back and forth, short enough that it lands well
+ * inside the 10 s forfeit grace period.
+ */
+const REFEREE_HANDOVER_MS = 4_000;
 
 const ShareDialog = dynamic(
   () => import("./share-dialog").then((m) => ({ default: m.ShareDialog })),
@@ -71,7 +84,7 @@ export function WordpinchUI({
     },
     []
   );
-  const { role } = useMyRole({
+  const { role, failed: roleFailed, retry: retryRole } = useMyRole({
     code: channelCode,
     clientId,
     name: storedName,
@@ -113,11 +126,22 @@ export function WordpinchUI({
     ? true
     : presence.some((m) => m.role === opponentRole);
 
+  // Referee = the client that drives phase transitions. The host normally
+  // holds it; if their tab goes away the guest picks it up after a short
+  // settle, because every transition (reveal→race, timeout, next round,
+  // forfeit) used to be host-gated and a departing host left the guest
+  // frozen with no timer, no result and no exit.
+  const hostAbsent =
+    role === "guest" && presenceReady && !presence.some((m) => m.role === "host");
+  const hostGoneForGood = useSustained(hostAbsent, REFEREE_HANDOVER_MS);
+  const canReferee = role === "host" || (role === "guest" && hostGoneForGood);
+
   const actions = useRoomActions({
     code: channelCode,
     clientId,
     state: liveState,
     role,
+    canReferee,
     applyState,
   });
 
@@ -151,6 +175,12 @@ export function WordpinchUI({
     ? liveState?.pendingResult?.attempts.some(
         (a) => a.by === myRoleForSettling
       ) ?? false
+    : false;
+  // Real signal for "the opponent has played their word this round" — their
+  // attempt is registered server-side and came back on the broadcast.
+  const opponentSubmitted = opponentRole
+    ? liveState?.pendingResult?.attempts.some((a) => a.by === opponentRole) ??
+      false
     : false;
   const isSettling =
     submitInFlight || (myAttemptInPending && phase === "race");
@@ -229,9 +259,16 @@ export function WordpinchUI({
             : u.by === "guest"
             ? guestName
             : "split",
+        bySide: u.by,
         timeMs: u.timeMs,
       })) ?? [],
     [liveUsedWords, hostName, guestName]
+  );
+
+  const liveRoundOutcomes = liveState?.rounds;
+  const roundOutcomes = React.useMemo(
+    () => liveRoundOutcomes ?? [],
+    [liveRoundOutcomes]
   );
 
   const sceneKey = React.useMemo(
@@ -255,6 +292,8 @@ export function WordpinchUI({
       firstPicker,
       raceStartedAt,
       meIsHost: role === "host",
+      mySide: role === "host" || role === "guest" ? role : null,
+      meIsReferee: canReferee,
       letterStart,
       letterEnd,
       word: resultWord,
@@ -279,7 +318,9 @@ export function WordpinchUI({
       guestName,
       guestPresent,
       opponentOnline,
+      opponentSubmitted,
       used: usedWords,
+      roundOutcomes,
       roomCode: roomCode ?? "",
       shareOpen,
       reconnectOpen,
@@ -316,7 +357,10 @@ export function WordpinchUI({
       guestScore,
       guestPresent,
       opponentOnline,
+      opponentSubmitted,
+      canReferee,
       usedWords,
+      roundOutcomes,
       shareOpen,
       reconnectOpen,
       muted,
@@ -330,10 +374,24 @@ export function WordpinchUI({
   );
 
   const showShare = shareOpen && phase !== "landing";
+  // Hidden in the lobby, which carries its own labelled "Share link" button
+  // — two identical share icons a few pixels apart read as a bug, not a
+  // choice.
+  const showChromeShare = phase !== "landing" && phase !== "lobby";
 
   return (
     <div className="wp-root" data-room={ctx.roomCode}>
-      {reconnectOpen ? <ReconnectBanner /> : null}
+      {/* Status banners live in normal flow above the phase, so they clear
+       *  the top chrome and shrink the body instead of covering either.
+       *  `roleFailed`: role resolution failed (offline, 5xx, rate limit) —
+       *  that used to fall through to `spectator`, silently demoting a host
+       *  to a read-only viewer of their own match. */}
+      {reconnectOpen || roleFailed ? (
+        <div className="wp-banners">
+          {reconnectOpen ? <ReconnectBanner /> : null}
+          {roleFailed ? <RoleErrorBanner onRetry={retryRole} /> : null}
+        </div>
+      ) : null}
 
       {/* Persistent across phase transitions so the progress bar + theme/
        *  mute/share icons don't flicker out during the AnimatePresence
@@ -345,8 +403,8 @@ export function WordpinchUI({
         muted={ctx.muted}
         onToggleMute={ctx.toggleMute}
         onShare={ctx.openShare}
-        showShare={phase !== "landing"}
-        showBrand={role !== "spectator"}
+        showShare={showChromeShare}
+        showLeave={!!roomCode && phase !== "landing"}
       />
 
       {/* Spectator routing: any client whose role resolved to 'spectator'

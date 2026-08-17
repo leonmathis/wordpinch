@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
 import { ScoreHud } from "./score-hud";
+import { OpponentAwayBanner } from "./opponent-away";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -14,6 +15,7 @@ const NON_ALPHA_REGEX = /[^A-Z]/g;
 
 export function PickPhase({ ctx }: { ctx: GameCtx }) {
   const [locked, setLocked] = React.useState(false);
+  const [locking, setLocking] = React.useState(false);
   const [val, setVal] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -21,10 +23,35 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
     if (!locked && inputRef.current) inputRef.current.focus();
   }, [locked]);
 
+  const lock = async () => {
+    if (!val || locking) return;
+    if (!ctx.actions.ready) {
+      // No room wired up (design preview) — keep the local-only behaviour.
+      setLocked(true);
+      return;
+    }
+    setLocking(true);
+    // Optimistic, but reversible: the lock used to be applied
+    // unconditionally while the POST result was ignored, so a failed
+    // request left this player "waiting for opponent" forever against a
+    // server that never recorded their letter.
+    setLocked(true);
+    const ok = await ctx.actions.lockMyLetter(val);
+    setLocking(false);
+    if (!ok) setLocked(false);
+  };
+
   return (
     <>
       <div className="wp-body">
         <div className="wp-frame scene" style={{ alignItems: "center" }}>
+          {/* Pick had no disconnect handling at all: no timer runs here, so
+           *  an opponent who left stranded the other player indefinitely. */}
+          {!ctx.opponentOnline ? (
+            <div className="w-full">
+              <OpponentAwayBanner ctx={ctx} />
+            </div>
+          ) : null}
           <div className="flex flex-col items-center text-center" style={{ gap: 36 }}>
             <div
               style={{
@@ -48,11 +75,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (!val) return;
-                  setLocked(true);
-                  if (ctx.actions.ready) {
-                    void ctx.actions.lockMyLetter(val);
-                  }
+                  void lock();
                 }}
                 style={{
                   display: "flex",
@@ -80,10 +103,10 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
                 />
                 <Button
                   type="submit"
-                  disabled={!val}
+                  disabled={!val || locking}
                   className="h-[38px] w-[180px] rounded-[var(--radius)] text-[14px] font-medium"
                 >
-                  Lock letter
+                  {locking ? "Locking…" : "Lock letter"}
                 </Button>
                 <div className="t-label">or press Enter</div>
               </form>
@@ -103,6 +126,16 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
                     <i />
                   </span>
                 </div>
+                {/* Letters stay server-private until both are in, so
+                 *  changing yours before the reveal leaks nothing — and a
+                 *  mistyped letter was otherwise stuck for the round. */}
+                <Button
+                  variant="ghost"
+                  onClick={() => setLocked(false)}
+                  className="h-auto p-0 font-mono text-[13px] text-muted-foreground hover:bg-transparent hover:text-foreground link-underline"
+                >
+                  Change letter
+                </Button>
               </div>
             )}
           </div>
@@ -110,7 +143,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
           <ScoreHud
             you={ctx.you}
             them={ctx.them}
-            used={ctx.used.slice(0, ctx.round - 1)}
+            used={ctx.used.filter((u) => u.round < ctx.round)}
           />
         </div>
       </div>

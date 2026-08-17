@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
 import { LettersDisplay } from "./letters-display";
+import { OpponentAwayBanner } from "./opponent-away";
 import { playTick } from "@/lib/sound";
 
 export function RevealPhase({ ctx }: { ctx: GameCtx }) {
@@ -12,8 +13,10 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
   // callback without listing `ctx.actions` as a dep — that identity
   // changes on every broadcast and would restart the countdown.
   const actionsRef = React.useRef(ctx.actions);
+  const refereeRef = React.useRef(ctx.meIsReferee);
   React.useEffect(() => {
     actionsRef.current = ctx.actions;
+    refereeRef.current = ctx.meIsReferee;
   });
 
   React.useEffect(() => {
@@ -26,19 +29,20 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
         }, i * 700)
       );
     }
-    // After GO + letter template (4.2s), the host advances to race. The
-    // guest's call is a no-op (action is host-gated) — they'll snap to
-    // race via the state broadcast.
+    // After GO + letter template (4.2s), the referee advances to race. The
+    // other client fires the same call as a no-op — they snap to race via
+    // the state broadcast. Reading the referee flag from a ref means a
+    // handover that lands mid-countdown still advances the round.
     ts.push(
       setTimeout(() => {
         if (advanceRef.current) return;
         advanceRef.current = true;
         const a = actionsRef.current;
-        if (a.ready && ctx.meIsHost) void a.advanceToRace();
+        if (a.ready && refereeRef.current) void a.advanceToRace();
       }, 4200)
     );
     return () => ts.forEach(clearTimeout);
-  }, [ctx.meIsHost]);
+  }, []);
 
   const A = ctx.letterStart;
   const B = ctx.letterEnd;
@@ -51,6 +55,14 @@ export function RevealPhase({ ctx }: { ctx: GameCtx }) {
           className="wp-frame"
           style={{ alignItems: "center", textAlign: "center" }}
         >
+          {/* Reveal is a fixed 4.2 s countdown driven by the referee's
+           *  client. If the other player vanishes here, this banner is what
+           *  eventually resolves the round instead of stalling on "GO". */}
+          {!ctx.opponentOnline ? (
+            <div className="w-full">
+              <OpponentAwayBanner ctx={ctx} />
+            </div>
+          ) : null}
           {step < 4 ? (
             <div className="countdown count-pop" key={step}>
               {label}

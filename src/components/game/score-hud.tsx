@@ -30,14 +30,19 @@ export function ScoreHud({ used, you, them }: Props) {
             <span className="tabular-nums">{them.score}</span>
           </span>
         </div>
+        {/* Disabled with nothing to show: it used to toggle `aria-expanded`
+         *  with no panel behind it, so clicking (or activating it with a
+         *  screen reader) did nothing at all. */}
         <Button
           variant="ghost"
           onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          aria-controls={panelId}
-          className="h-auto p-0 font-mono text-[13px] text-muted-foreground hover:bg-transparent hover:text-foreground"
+          disabled={used.length === 0}
+          aria-expanded={used.length > 0 ? open : undefined}
+          aria-controls={used.length > 0 ? panelId : undefined}
+          className="h-auto p-0 font-mono text-[13px] text-muted-foreground hover:bg-transparent hover:text-foreground disabled:opacity-100 disabled:text-muted-soft"
         >
-          Words played · {used.length} {open ? "↑" : "↓"}
+          Words played · {used.length}
+          {used.length > 0 ? (open ? " ↑" : " ↓") : ""}
         </Button>
       </div>
       {open && used.length > 0 ? (

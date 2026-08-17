@@ -13,12 +13,18 @@ import { Avatar } from "./avatar";
 const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
 
-function Banner() {
+function Banner({ ctx }: { ctx: GameCtx }) {
   // On narrow screens the theme / sound / share icons in `TopChrome` sit
   // in the same row as `top: 12`, so the banner used to slide *under*
   // them visually (banner has lower z-index). The `sm` breakpoint
   // (640 px) flips us back into the desktop-centered position where
   // there's room either side of the icons.
+  //
+  // Suppressed while the reconnect banner is up: both are absolutely
+  // positioned at the same coordinates, and this one (later in the DOM)
+  // painted straight over the reconnect notice *and* its Refresh button.
+  if (ctx.reconnectOpen) return null;
+  const playerCount = ctx.guestPresent ? 2 : 1;
   return (
     <div
       className="absolute left-0 right-0 z-[3] flex justify-center px-4 pointer-events-none top-[60px] sm:top-3"
@@ -26,7 +32,10 @@ function Banner() {
       <Alert className="max-w-sm backdrop-blur-sm bg-background/85 shadow-sm">
         <Eye />
         <AlertDescription>
-          Watching wordpinch — 2 players in game
+          {/* The count used to be hard-coded to "2 players", and nothing
+           *  explained why this viewer can't play. */}
+          Watching — both seats are taken ({playerCount}{" "}
+          {playerCount === 1 ? "player" : "players"} in this room)
         </AlertDescription>
       </Alert>
     </div>
@@ -71,7 +80,7 @@ function SpectatorLobby({ ctx }: { ctx: GameCtx }) {
       <Separator />
       <div className="players-row">
         <div className="flex items-center gap-3">
-          <Avatar name={ctx.hostName} />
+          <Avatar name={ctx.hostName} side="host" />
           <span>
             {ctx.hostName} <span className="t-label">(host)</span>
           </span>
@@ -81,7 +90,7 @@ function SpectatorLobby({ ctx }: { ctx: GameCtx }) {
       <div className="players-row">
         <div className="flex items-center gap-3">
           {ctx.guestPresent ? (
-            <Avatar name={ctx.guestName} />
+            <Avatar name={ctx.guestName} side="guest" />
           ) : (
             <Avatar
               name="?"
@@ -127,7 +136,7 @@ function SpectatorPick({ ctx }: { ctx: GameCtx }) {
       <ScoreHud
         you={ctx.you}
         them={ctx.them}
-        used={ctx.used.slice(0, ctx.round - 1)}
+        used={ctx.used.filter((u) => u.round < ctx.round)}
       />
     </div>
   );
@@ -200,7 +209,7 @@ function SpectatorRace({ ctx }: { ctx: GameCtx }) {
         style={{ marginTop: 14 }}
       >
         <div className="t-label flex items-center" style={{ gap: 8 }}>
-          <Avatar name={ctx.hostName} size={18} />
+          <Avatar name={ctx.hostName} size={18} side="host" />
           <span>{ctx.hostName} typing</span>
           <span
             className="wp-dot pulse-soft"
@@ -213,14 +222,14 @@ function SpectatorRace({ ctx }: { ctx: GameCtx }) {
             style={{ background: "var(--muted-foreground)" }}
           />
           <span>{ctx.guestName} typing</span>
-          <Avatar name={ctx.guestName} size={18} />
+          <Avatar name={ctx.guestName} size={18} side="guest" />
         </div>
       </div>
 
       <ScoreHud
         you={ctx.you}
         them={ctx.them}
-        used={ctx.used.slice(0, ctx.round - 1)}
+        used={ctx.used.filter((u) => u.round < ctx.round)}
       />
     </div>
   );
@@ -256,7 +265,7 @@ function SpectatorResult({ ctx }: { ctx: GameCtx }) {
       <ScoreHud
         you={ctx.you}
         them={ctx.them}
-        used={ctx.used.slice(0, ctx.round)}
+        used={ctx.used.filter((u) => u.round <= ctx.round)}
       />
     </div>
   );
@@ -296,7 +305,7 @@ function SpectatorMatchEnd({ ctx }: { ctx: GameCtx }) {
 export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
   return (
     <>
-      <Banner />
+      <Banner ctx={ctx} />
       {/* `pt-[120px]` on narrow viewports clears the banner that's been
        *  pushed to `top: 60` to avoid overlapping the chrome icons; the
        *  `sm:pt-[76px]` falls back to the desktop value where the banner

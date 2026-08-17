@@ -27,11 +27,19 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Body must be an object" }, { status: 400 });
   }
 
-  const { hostId, state } = body as { hostId?: unknown; state?: unknown };
+  // `actorId` is either seated player: the guest becomes the acting referee
+  // when the host's client disappears mid-match. `hostId` is still accepted
+  // so a client mid-deploy (old bundle, new server) keeps working.
+  const { actorId, hostId, state } = body as {
+    actorId?: unknown;
+    hostId?: unknown;
+    state?: unknown;
+  };
+  const actor = typeof actorId === "string" ? actorId : hostId;
 
-  if (typeof hostId !== "string" || !UUID_REGEX.test(hostId)) {
+  if (typeof actor !== "string" || !UUID_REGEX.test(actor)) {
     return NextResponse.json(
-      { error: "hostId must be a UUID v4 string" },
+      { error: "actorId must be a UUID v4 string" },
       { status: 400 }
     );
   }
@@ -55,12 +63,12 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const ok = await updateRoomState({
       code,
-      hostId,
+      actorId: actor,
       state: validated,
     });
     if (!ok) {
       return NextResponse.json(
-        { error: "Room not found or hostId mismatch" },
+        { error: "Room not found, or you don't hold a player slot in it" },
         { status: 403 }
       );
     }

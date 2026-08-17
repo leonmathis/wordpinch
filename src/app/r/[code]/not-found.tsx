@@ -6,7 +6,12 @@ export default function RoomNotFound() {
   return (
     <div className="wp-root">
       <div className="wp-chrome">
-        <div className="wp-brand">wordpinch</div>
+        <Link
+          href="/"
+          className="wp-brand rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          wordpinch
+        </Link>
         <div />
       </div>
       <div className="wp-body">

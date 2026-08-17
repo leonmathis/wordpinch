@@ -114,6 +114,28 @@ export function useIsMounted(): boolean {
   );
 }
 
+// ── useSustained ───────────────────────────────────────────────────────
+/**
+ * Returns true only once `active` has stayed true continuously for
+ * `delayMs`. Used to debounce presence-derived decisions (e.g. handing the
+ * referee role to the guest) so a one-second websocket blip doesn't hand
+ * control back and forth.
+ */
+export function useSustained(active: boolean, delayMs: number): boolean {
+  const [sustained, setSustained] = React.useState(false);
+
+  React.useEffect(() => {
+    // Both branches defer the setState into a timer callback — a synchronous
+    // setState in an effect body trips `react-hooks/set-state-in-effect`.
+    const t = active
+      ? setTimeout(() => setSustained(true), delayMs)
+      : setTimeout(() => setSustained(false), 0);
+    return () => clearTimeout(t);
+  }, [active, delayMs]);
+
+  return sustained;
+}
+
 // ── useClientId ────────────────────────────────────────────────────────
 const CLIENT_ID_KEY = STORAGE_PREFIX + "client-id";
 const clientIdNoopSubscribe = () => () => {};

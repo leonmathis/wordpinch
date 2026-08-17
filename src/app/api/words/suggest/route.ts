@@ -59,11 +59,29 @@ export async function GET(request: Request) {
     // (better cache key, no random feel for the player).
     for (const bucket of byLength.values()) bucket.sort();
 
+    /**
+     * Take `count` entries spread evenly across a bucket instead of the
+     * first N. Taking the head meant T→H always answered "tach teth toph
+     * tosh tush" — the alphabetically-first, and reliably the most obscure,
+     * words in the list. Sampling by stride keeps the response deterministic
+     * (so it still caches) while surfacing words players recognise.
+     */
+    const spread = (bucket: string[], count: number): string[] => {
+      if (bucket.length <= count) return [...bucket];
+      const stride = bucket.length / count;
+      const out: string[] = [];
+      for (let i = 0; i < count; i++) {
+        out.push(bucket[Math.floor(i * stride)]);
+      }
+      return out;
+    };
+
     const suggestions: string[] = [];
     const atMin = byLength.get(min);
 
     if (atMin && atMin.length > 0) {
-      suggestions.push(...atMin.slice(0, MAX_AT_MIN_LENGTH));
+      const atMinPicks = spread(atMin, MAX_AT_MIN_LENGTH);
+      suggestions.push(...atMinPicks);
 
       // Top up with 1–2 longer entries from the next available lengths.
       const longerLengths = [...byLength.keys()]
@@ -73,18 +91,18 @@ export async function GET(request: Request) {
         if (suggestions.length >= MAX_SUGGESTIONS) break;
         const bucket = byLength.get(len) ?? [];
         const room = Math.min(
-          MAX_LONGER - (suggestions.length - atMin.slice(0, MAX_AT_MIN_LENGTH).length),
+          MAX_LONGER - (suggestions.length - atMinPicks.length),
           MAX_SUGGESTIONS - suggestions.length,
           bucket.length
         );
-        if (room > 0) suggestions.push(...bucket.slice(0, room));
+        if (room > 0) suggestions.push(...spread(bucket, room));
       }
     } else {
       // No words at the exact minimum — fall back to the shortest available
       // length so the player still sees a concrete example.
       const shortestLen = Math.min(...byLength.keys());
       const bucket = byLength.get(shortestLen) ?? [];
-      suggestions.push(...bucket.slice(0, MAX_SUGGESTIONS));
+      suggestions.push(...spread(bucket, MAX_SUGGESTIONS));
     }
 
     return NextResponse.json(

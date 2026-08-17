@@ -20,22 +20,18 @@ export function QR({ value, size = 140 }: Props) {
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    // Use CSS oklch tokens for colors by reading the computed style.
-    // The qrcode lib only accepts hex / rgba colors, so we resolve them here.
-    const root = window.getComputedStyle(document.documentElement);
-    const fg = root.getPropertyValue("--foreground").trim() || "#000";
-    const bg = root.getPropertyValue("--background").trim() || "#fff";
 
+    // Deliberately theme-independent: dark modules on a white field is what
+    // camera scanners expect, and an inverted (light-on-dark) code fails on
+    // many of them. This used to *try* to follow the theme by parsing
+    // `oklch(...)` out of the CSS token — but Chrome returns those tokens as
+    // `lab(...)`, so the parse always failed and the code silently fell back
+    // to these same values. Now the choice is explicit instead of accidental.
     void QRCode.toCanvas(canvas, value, {
       width: size,
-      margin: 1,
+      margin: 2,
       errorCorrectionLevel: "M",
-      color: {
-        // Browsers accept oklch() values in canvas fillStyle on modern engines.
-        // Fall back to high-contrast hex if oklch() fails.
-        dark: oklchToHex(fg) ?? "#000000",
-        light: oklchToHex(bg) ?? "#ffffff",
-      },
+      color: { dark: "#000000", light: "#ffffff" },
     }).catch((err) => {
       console.warn("[QR] toCanvas failed", err);
     });
@@ -46,25 +42,10 @@ export function QR({ value, size = 140 }: Props) {
       ref={canvasRef}
       width={size}
       height={size}
-      className="mx-auto block"
+      role="img"
+      className="mx-auto block rounded-[6px]"
       style={{ marginTop: 18 }}
-      aria-label={`QR code for ${value}`}
+      aria-label={`QR code linking to ${value}`}
     />
   );
-}
-
-/**
- * Quick oklch → hex fallback so the QR lib (which only accepts hex/rgb) has a
- * valid color even though our tokens are in oklch().
- *   oklch(1 0 0)     → #ffffff
- *   oklch(0.145 0 0) → #252525-ish
- */
-function oklchToHex(oklch: string): string | null {
-  const match = oklch.match(/oklch\(\s*([\d.]+)/);
-  if (!match) return null;
-  const l = parseFloat(match[1]);
-  // For our greyscale palette, L maps roughly linearly to brightness.
-  const v = Math.round(Math.max(0, Math.min(1, l)) * 255);
-  const h = v.toString(16).padStart(2, "0");
-  return `#${h}${h}${h}`;
 }

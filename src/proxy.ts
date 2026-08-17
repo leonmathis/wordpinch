@@ -29,23 +29,28 @@ type LimitRule = {
 const HOUR = 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
 
+// Limits are per *IP*, and an IP is usually a household, an office or a
+// café — i.e. exactly the people most likely to play each other. The
+// original numbers (5 rooms/hour, 60 mutations/min) were sized for one
+// player and locked a second one out mid-match; these are sized for a few
+// concurrent games behind one NAT while still capping scripted abuse.
 const LIMITS: LimitRule[] = [
   {
     scope: "create-room",
     match: (p, m) => m === "POST" && p === "/api/rooms",
-    limit: 5,
+    limit: 20,
     windowMs: HOUR,
   },
   {
     scope: "word-validate",
     match: (p, m) => m === "POST" && p === "/api/words/validate",
-    limit: 30,
+    limit: 90,
     windowMs: MINUTE,
   },
   {
     scope: "room-mutations",
     match: (p, m) => m === "POST" && p.startsWith("/api/rooms/"),
-    limit: 60,
+    limit: 180,
     windowMs: MINUTE,
   },
 ];

@@ -111,6 +111,20 @@ export type PersistedGameState = {
    * of starting fresh at `settings.roundTimerSec`.
    */
   raceStartedAt?: number;
+  /**
+   * One entry per *concluded* round, in play order. `usedWords` alone can't
+   * explain a round: forfeits and timeouts produce no word at all, so the
+   * match-end summary showed an empty row next to a score that had gone up.
+   * Replayed rounds overwrite their own entry rather than appending.
+   *
+   * Optional for forward-compat: rooms created before this field existed
+   * simply render the summary without outcome labels.
+   */
+  rounds?: {
+    round: number;
+    winner: "host" | "guest" | "split" | "none";
+    reason?: "timeout" | "tied_nobody" | "forfeit";
+  }[];
   usedWords: {
     round: number;
     word: string;

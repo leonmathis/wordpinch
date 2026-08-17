@@ -5,9 +5,9 @@ import type { GameCtx } from "@/lib/game/types";
 import { ScoreHud } from "./score-hud";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { TriangleAlert } from "lucide-react";
+import { Check } from "lucide-react";
 import { LettersDisplay } from "./letters-display";
+import { OpponentAwayBanner } from "./opponent-away";
 import { Avatar } from "./avatar";
 import { playBuzz } from "@/lib/sound";
 
@@ -69,41 +69,6 @@ function useRaceTimer(
   return left;
 }
 
-/**
- * Grace period (ms) after the opponent disconnects before the host's client
- * forfeits the round in favour of the player still here.
- */
-const FORFEIT_GRACE_MS = 10_000;
-
-function DisconnectBanner({ opponentName }: { opponentName: string }) {
-  const [secondsLeft, setSecondsLeft] = React.useState(
-    Math.ceil(FORFEIT_GRACE_MS / 1000)
-  );
-  React.useEffect(() => {
-    const start = Date.now();
-    const tick = () => {
-      const elapsed = Date.now() - start;
-      const remaining = Math.max(
-        0,
-        Math.ceil((FORFEIT_GRACE_MS - elapsed) / 1000)
-      );
-      setSecondsLeft(remaining);
-    };
-    tick();
-    const i = setInterval(tick, 250);
-    return () => clearInterval(i);
-  }, []);
-  return (
-    <Alert variant="destructive" className="mb-4">
-      <TriangleAlert />
-      <AlertDescription className="font-mono text-[13px]">
-        {opponentName} disconnected · forfeits in{" "}
-        <span className="tabular-nums">{secondsLeft}s</span>
-      </AlertDescription>
-    </Alert>
-  );
-}
-
 export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const A = ctx.letterStart;
   const B = ctx.letterEnd;
@@ -113,6 +78,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const gaps = Math.max(0, ctx.minWordLength - 2);
   const [val, setVal] = React.useState(A);
   const [reject, setReject] = React.useState(false);
+  const [rejectMessage, setRejectMessage] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -136,11 +102,17 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   });
 
   const paused = !ctx.opponentOnline;
+  // `refereeRef` mirrors ctx.meIsReferee so the timer callback (armed once)
+  // sees the current value — the guest can acquire the role mid-round.
+  const refereeRef = React.useRef(ctx.meIsReferee);
+  React.useEffect(() => {
+    refereeRef.current = ctx.meIsReferee;
+  });
   const left = useRaceTimer(initialLeft, paused, () => {
-    // Host-gated: only the referee can declare a timeout. Guest fires the
-    // same callback but no-ops; they'll receive the result via broadcast.
+    // Referee-gated: only one client declares the timeout. The other fires
+    // the same callback but no-ops; they receive the result via broadcast.
     const a = actionsRef.current;
-    if (a.ready && ctx.meIsHost) void a.timeoutRound();
+    if (a.ready && refereeRef.current) void a.timeoutRound();
   });
 
   // One-shot urgency pulse the moment the clock crosses from 6 → 5.
@@ -154,22 +126,9 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     prevLeftRef.current = left;
   }, [left]);
 
-  // 10 s grace period: if the opponent stays disconnected, the host's
-  // client awards the round to the player still here. Guests don't run
-  // this — they're either the disappearing player (no client to fire)
-  // or they're the one still here (waiting for host's call).
-  React.useEffect(() => {
-    if (!ctx.meIsHost) return;
-    if (ctx.opponentOnline) return;
-    const t = setTimeout(() => {
-      // Forfeit the round to the local player (host). The action itself
-      // re-checks state.phase / pendingResult to avoid clobbering an
-      // in-flight resolver.
-      const a = actionsRef.current;
-      if (a.ready) void a.forfeitRound("host");
-    }, FORFEIT_GRACE_MS);
-    return () => clearTimeout(t);
-  }, [ctx.meIsHost, ctx.opponentOnline]);
+  // The 10 s grace period + forfeit now live in <OpponentAwayBanner>, which
+  // mounts for whichever player is still here and is shared with the pick
+  // and reveal phases.
   const rejectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(
@@ -179,11 +138,23 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     []
   );
 
-  const triggerReject = React.useCallback(() => {
+  /**
+   * Reject the current attempt and say why.
+   *
+   * The shake + buzz alone were the *entire* feedback for five different
+   * failures (too short, wrong letters, already played, not a word, network
+   * error), which left players guessing — and the reduced-motion + muted
+   * combination left them with almost nothing at all. The message persists
+   * until the next keystroke and is announced via a live region.
+   */
+  const triggerReject = React.useCallback((message: string) => {
     if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
     // setTimeout(0) keeps the setState async — required by
     // react-hooks/set-state-in-effect when triggerReject is called from an effect.
-    setTimeout(() => setReject(true), 0);
+    setTimeout(() => {
+      setReject(true);
+      setRejectMessage(message);
+    }, 0);
     playBuzz();
     rejectTimerRef.current = setTimeout(() => {
       setReject(false);
@@ -201,6 +172,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const cleaned = e.target.value.toUpperCase().replace(NON_ALPHA_REGEX, "");
     setVal(cleaned.startsWith(A) ? cleaned : A + cleaned);
+    if (rejectMessage) setRejectMessage(null);
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -214,13 +186,22 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     const alreadyUsed = ctx.used.some(
       (u) => u.word.toLowerCase() === lower
     );
-    if (
-      val.length < ctx.minWordLength ||
-      !val.startsWith(A) ||
-      !val.endsWith(B) ||
-      alreadyUsed
-    ) {
-      triggerReject();
+    if (val.length < ctx.minWordLength) {
+      triggerReject(
+        `Too short — needs at least ${ctx.minWordLength} letters.`
+      );
+      return;
+    }
+    if (!val.startsWith(A)) {
+      triggerReject(`Has to start with ${A}.`);
+      return;
+    }
+    if (!val.endsWith(B)) {
+      triggerReject(`Has to end with ${B}.`);
+      return;
+    }
+    if (alreadyUsed) {
+      triggerReject(`${val} has already been played this match.`);
       return;
     }
     setSubmitting(true);
@@ -240,6 +221,16 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           allowProperNouns: ctx.settings.allowProperNouns,
         }),
       });
+      if (!res.ok) {
+        // 429 / 500 from our own API — not the player's fault, and telling
+        // them "not a word" here would be a lie.
+        triggerReject(
+          res.status === 429
+            ? "Checking too fast — wait a second and submit again."
+            : "Couldn't check that word — try again."
+        );
+        return;
+      }
       const data = (await res.json()) as {
         valid?: boolean;
         phonetic?: string;
@@ -247,7 +238,11 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
         definitions?: { partOfSpeech: string; definition: string; example?: string }[];
       };
       if (!data.valid) {
-        triggerReject();
+        triggerReject(
+          ctx.settings.allowProperNouns
+            ? `${val} isn't in the dictionary.`
+            : `${val} isn't in the word list. Proper nouns and slang are off for this match.`
+        );
         return;
       }
       // Word is real — commit to the settling overlay before posting
@@ -264,7 +259,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
       }
     } catch (err) {
       console.warn("[race] validation request failed", err);
-      triggerReject();
+      triggerReject("Connection problem — your word wasn't checked. Try again.");
     } finally {
       setSubmitting(false);
       if (raisedInFlight) ctx.setSubmitInFlight(false);
@@ -298,7 +293,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           className="wp-frame scene"
           onClick={focusInput}
         >
-          {paused ? <DisconnectBanner opponentName={ctx.them.name} /> : null}
+          {paused ? <OpponentAwayBanner ctx={ctx} /> : null}
           <div className="flex items-center justify-between" style={{ marginBottom: 22 }}>
             <LettersDisplay start={A} end={B} gaps={gaps} />
             <div
@@ -351,6 +346,17 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
             >
               {submitting ? "Submitting…" : "Submit"}
             </Button>
+            {/* Always rendered so the live region exists before the first
+             *  rejection — screen readers ignore regions inserted at the
+             *  same moment their content appears. */}
+            <div
+              role="status"
+              aria-live="polite"
+              className="t-label text-center mt-2 min-h-[18px]"
+              style={rejectMessage ? { color: "var(--destructive)" } : undefined}
+            >
+              {rejectMessage ?? ""}
+            </div>
           </form>
 
           <div
@@ -362,17 +368,46 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
              *  to flip it: same row reading "Submitted" alongside the
              *  opponent's avatar looked like the opponent had
              *  submitted). `min-w-0` + `truncate` lets long names
-             *  ellipsize instead of pushing the row to two lines. */}
+             *  ellipsize instead of pushing the row to two lines.
+             *
+             *  It used to read "<name> is typing" unconditionally — a
+             *  claim the app has no signal for, and one that kept
+             *  showing while the banner above said the same player had
+             *  disconnected. Now it reports only what we actually know:
+             *  presence, and whether their word has reached the server. */}
             <div
               className="t-label flex items-center min-w-0"
               style={{ gap: 8 }}
             >
-              <Avatar name={ctx.them.name} size={18} />
-              <span className="truncate">{ctx.them.name} is typing</span>
-              <span
-                className="wp-dot pulse-soft shrink-0"
-                style={{ background: "var(--muted-foreground)" }}
+              <Avatar
+                name={ctx.them.name}
+                size={18}
+                dim={paused}
+                side={ctx.mySide === "host" ? "guest" : "host"}
               />
+              <span className="truncate">
+                {paused
+                  ? `${ctx.them.name} is offline`
+                  : ctx.opponentSubmitted
+                  ? `${ctx.them.name} submitted`
+                  : `${ctx.them.name} is in the round`}
+              </span>
+              {ctx.opponentSubmitted && !paused ? (
+                <Check
+                  strokeWidth={2}
+                  className="size-[13px] shrink-0"
+                  aria-hidden
+                />
+              ) : (
+                <span
+                  className={`wp-dot shrink-0 ${paused ? "" : "pulse-soft"}`}
+                  style={{
+                    background: paused
+                      ? "var(--muted-soft)"
+                      : "var(--muted-foreground)",
+                  }}
+                />
+              )}
             </div>
             {/* RIGHT — local-side hint. Hidden on narrow viewports
              *  where the "Enter to submit" affordance doesn't apply
@@ -391,7 +426,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           <ScoreHud
             you={ctx.you}
             them={ctx.them}
-            used={ctx.used.slice(0, ctx.round - 1)}
+            used={ctx.used.filter((u) => u.round < ctx.round)}
           />
         </div>
       </div>

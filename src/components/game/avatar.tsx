@@ -10,13 +10,22 @@ import { cn } from "@/lib/utils";
  * uniform (rgb hand-picked palettes drift here).
  */
 const PALETTE = [
-  "oklch(0.66 0.16 25)", // warm red-orange
-  "oklch(0.7 0.14 80)", // amber
-  "oklch(0.66 0.14 150)", // green
-  "oklch(0.66 0.12 210)", // teal-blue
-  "oklch(0.62 0.16 280)", // violet
-  "oklch(0.66 0.16 340)", // pink
+  "oklch(0.48 0.16 25)", // warm red-orange
+  "oklch(0.5 0.13 80)", // amber
+  "oklch(0.47 0.12 150)", // green
+  "oklch(0.48 0.12 210)", // teal-blue
+  "oklch(0.48 0.16 280)", // violet
+  "oklch(0.48 0.15 340)", // pink
 ];
+
+/**
+ * Fixed palette slots for the two seats. The name hash alone gave both
+ * players the same colour whenever their names collided in the 6-slot
+ * palette (the out-of-the-box "Host"/"guest" pair did exactly that), which
+ * defeats the point of a colour-coded avatar. Seats are far apart on the
+ * wheel so they never read as the same person.
+ */
+const SIDE_SLOT = { host: 1, guest: 3 } as const;
 
 /**
  * Stable hash → palette index. djb2-ish; not crypto, just spreads inputs
@@ -37,6 +46,12 @@ type Props = {
   className?: string;
   /** When true, dim the avatar to indicate offline / inactive. */
   dim?: boolean;
+  /**
+   * Which seat this avatar represents. When given, the colour comes from
+   * the seat rather than the name hash, so the two players are always
+   * distinguishable (and stay the same colour on both screens).
+   */
+  side?: "host" | "guest";
 };
 
 /**
@@ -45,10 +60,11 @@ type Props = {
  * Initials are forced uppercase; first character of the trimmed name —
  * falling back to "?" if empty.
  */
-export function Avatar({ name, size = 24, className, dim = false }: Props) {
+export function Avatar({ name, size = 24, className, dim = false, side }: Props) {
   const trimmed = name?.trim() ?? "";
   const initial = (trimmed[0] ?? "?").toUpperCase();
-  const color = PALETTE[hashName(trimmed) % PALETTE.length];
+  const color =
+    PALETTE[side ? SIDE_SLOT[side] : hashName(trimmed) % PALETTE.length];
   return (
     <span
       aria-hidden

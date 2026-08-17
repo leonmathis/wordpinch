@@ -52,6 +52,16 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
   const router = useRouter();
   const youWon = ctx.you.score > ctx.them.score;
   const tied = ctx.you.score === ctx.them.score;
+  // Score pair reads in the same order as the headline name: winner first.
+  // Printing it always as (you–them) made the loser's screen say
+  // "Host wins 0–2" — the winner's name against the loser's score.
+  const [leadScore, trailScore] =
+    tied || youWon
+      ? [ctx.you.score, ctx.them.score]
+      : [ctx.them.score, ctx.you.score];
+  // Spectators have no seat; they read the board from the host's side.
+  const yourSide: "host" | "guest" = ctx.mySide ?? "host";
+  const theirSide: "host" | "guest" = yourSide === "host" ? "guest" : "host";
 
   React.useEffect(() => {
     playChime();
@@ -104,8 +114,8 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               : youWon
               ? `${ctx.you.name} wins`
               : `${ctx.them.name} wins`}{" "}
-            <span className="text-muted-foreground">
-              {ctx.you.score}–{ctx.them.score}
+            <span className="text-muted-foreground tabular-nums">
+              {leadScore}–{trailScore}
             </span>
           </h1>
 
@@ -116,7 +126,7 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               data-winner={!tied && youWon ? "true" : "false"}
             >
               <div className="flex items-center" style={{ gap: 10 }}>
-                <Avatar name={ctx.you.name} />
+                <Avatar name={ctx.you.name} side={yourSide} />
                 <span>{ctx.you.name}</span>
               </div>
               <span className="font-mono tabular-nums">{ctx.you.score}</span>
@@ -127,7 +137,7 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               data-winner={!tied && !youWon ? "true" : "false"}
             >
               <div className="flex items-center" style={{ gap: 10 }}>
-                <Avatar name={ctx.them.name} />
+                <Avatar name={ctx.them.name} side={theirSide} />
                 <span>{ctx.them.name}</span>
               </div>
               <span className="font-mono tabular-nums">{ctx.them.score}</span>
@@ -166,25 +176,42 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
                   className="flex items-center gap-2"
                   style={{ padding: "10px 12px 6px" }}
                 >
-                  <Avatar name={ctx.you.name} size={18} />
+                  <Avatar name={ctx.you.name} size={18} side={yourSide} />
                   <span className="text-muted-foreground">{ctx.you.name}</span>
                 </div>
                 <div
                   className="flex items-center gap-2"
                   style={{ padding: "10px 12px 6px" }}
                 >
-                  <Avatar name={ctx.them.name} size={18} />
+                  <Avatar name={ctx.them.name} size={18} side={theirSide} />
                   <span className="text-muted-foreground">{ctx.them.name}</span>
                 </div>
                 <Separator className="col-span-3" />
                 {Array.from({ length: ctx.total }, (_, i) => i + 1).map((r) => {
                   const entries = ctx.used.filter((u) => u.round === r);
-                  const yourEntry = entries.find(
-                    (u) => u.by === ctx.you.name
-                  );
-                  const theirEntry = entries.find(
-                    (u) => u.by === ctx.them.name
-                  );
+                  // Match on the *side*, not the display name — two players
+                  // who pick the same name would otherwise both read from
+                  // the same cell.
+                  const yourEntry = entries.find((u) => u.bySide === yourSide);
+                  const theirEntry = entries.find((u) => u.bySide === theirSide);
+                  const outcome = ctx.roundOutcomes.find((o) => o.round === r);
+                  // Rounds that produced no word (forfeit / timeout) used to
+                  // render as two blank cells beside a score that had gone
+                  // up — no explanation anywhere.
+                  const outcomeLabel =
+                    entries.length > 0
+                      ? null
+                      : outcome?.reason === "forfeit"
+                      ? `${
+                          outcome.winner === yourSide ? ctx.you.name : ctx.them.name
+                        } won — opponent left`
+                      : outcome?.reason === "timeout"
+                      ? outcome.winner === "split"
+                        ? "Out of time — both scored"
+                        : "Out of time — nobody scored"
+                      : outcome
+                      ? "No word played"
+                      : null;
                   // Highlight whichever entry was first (lower timeMs) — that's
                   // the round winner. Solo wins still set the winner's time;
                   // late-arriving near-misses also carry a time so we can rank.
@@ -204,8 +231,25 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
                       >
                         Rd {r}
                       </div>
-                      <PlayerCell entry={yourEntry} dim={!yourFirst && theirFirst} />
-                      <PlayerCell entry={theirEntry} dim={!theirFirst && yourFirst} />
+                      {outcomeLabel ? (
+                        <div
+                          className="col-span-2 self-center text-muted-foreground"
+                          style={{ padding: "10px 12px" }}
+                        >
+                          {outcomeLabel}
+                        </div>
+                      ) : (
+                        <>
+                          <PlayerCell
+                            entry={yourEntry}
+                            dim={!yourFirst && theirFirst}
+                          />
+                          <PlayerCell
+                            entry={theirEntry}
+                            dim={!theirFirst && yourFirst}
+                          />
+                        </>
+                      )}
                       <Separator className="col-span-3" />
                     </Fragment>
                   );
@@ -214,12 +258,16 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
             </div>
           </section>
 
+          {/* Referee (host, or the guest once the host has gone) can restart.
+           *  A rematch needs both players, so it's disabled while the other
+           *  side is away rather than silently starting a lobby nobody is
+           *  in. */}
           <Button
             className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             style={{ marginTop: 28 }}
-            disabled={!ctx.meIsHost}
+            disabled={!ctx.meIsReferee || !ctx.opponentOnline}
             onClick={() => {
-              if (!ctx.meIsHost) return;
+              if (!ctx.meIsReferee) return;
               if (ctx.actions.ready) {
                 void ctx.actions.rematch();
               } else {
@@ -227,7 +275,11 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               }
             }}
           >
-            {ctx.meIsHost ? "Rematch" : "Waiting for host…"}
+            {!ctx.opponentOnline
+              ? `Waiting for ${ctx.them.name} to come back…`
+              : ctx.meIsReferee
+              ? "Rematch"
+              : "Waiting for host…"}
           </Button>
           <Button
             variant="ghost"

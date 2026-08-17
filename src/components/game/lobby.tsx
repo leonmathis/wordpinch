@@ -10,12 +10,31 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Separator } from "@/components/ui/separator";
 import { useStoredString } from "@/lib/hooks";
-import { Share2 } from "lucide-react";
+import { Share2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar } from "./avatar";
 import { motion } from "motion/react";
 
-const SETTINGS_LABEL = "t-label font-mono text-[13px] text-muted-foreground tracking-[0.01em] cursor-pointer";
+// `cursor-pointer` only belongs on rows whose text is a real <Label> bound
+// to a control — it used to be on every settings label, including the ones
+// that are inert <span>s next to steppers.
+const SETTINGS_LABEL =
+  "t-label font-mono text-[13px] text-muted-foreground tracking-[0.01em]";
+const SETTINGS_LABEL_CLICKABLE = `${SETTINGS_LABEL} cursor-pointer`;
+/**
+ * Secondary line under a settings label. Uses `muted-foreground`, not the
+ * softer `muted-soft`: at 11px this is small text and needs the 4.5:1 ratio
+ * (muted-soft only clears the 3:1 large-text bar in light mode). The
+ * hierarchy comes from the size difference instead.
+ */
+const SETTINGS_HINT = "font-mono text-[11px] text-muted-foreground mt-0.5";
+
+/** Plain-language gloss for each tie option, shown under the toggle group. */
+const TIE_HINTS: Record<"replay" | "split" | "nobody", string> = {
+  replay: "Tied round is played again",
+  split: "Both players score the point",
+  nobody: "Nobody scores the point",
+};
 
 /**
  * Local-state mirror for a value that's authoritative on the server and
@@ -117,20 +136,27 @@ function NumberStepper({
     if (next !== local) update(next);
   };
 
+  // `role="group"` makes the aria-label announce; on a bare <div> it was
+  // ignored, so all three steppers read as an identical pair of
+  // "Decrease"/"Increase" buttons with no idea which setting they moved.
+  // The value gets the same treatment via aria-live so a change is spoken.
   return (
-    <div className="flex items-center gap-2" aria-label={ariaLabel}>
+    <div className="flex items-center gap-2" role="group" aria-label={ariaLabel}>
       <Button
         type="button"
         variant="outline"
         size="icon"
         onClick={dec}
         disabled={disabled || local <= min}
-        aria-label="Decrease"
-        className="h-8 w-8 rounded-full font-mono text-[14px]"
+        aria-label={ariaLabel ? `Decrease ${ariaLabel.toLowerCase()}` : "Decrease"}
+        className="h-9 w-9 rounded-full font-mono text-[14px]"
       >
         −
       </Button>
-      <span className="font-mono text-[14px] tabular-nums w-10 text-center">
+      <span
+        className="font-mono text-[14px] tabular-nums w-10 text-center"
+        aria-live="polite"
+      >
         {local}
       </span>
       <Button
@@ -139,8 +165,8 @@ function NumberStepper({
         size="icon"
         onClick={inc}
         disabled={disabled || local >= max}
-        aria-label="Increase"
-        className="h-8 w-8 rounded-full font-mono text-[14px]"
+        aria-label={ariaLabel ? `Increase ${ariaLabel.toLowerCase()}` : "Increase"}
+        className="h-9 w-9 rounded-full font-mono text-[14px]"
       >
         +
       </Button>
@@ -259,18 +285,25 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
     <>
       <div className="wp-body">
         <div className="wp-frame scene">
-          <div className="flex items-center justify-between">
+          <div className="flex items-end justify-between gap-3">
+            {/* The `.room-code` font-size lives in @layer components, which
+             *  Tailwind's utilities layer outranks — the Button's own
+             *  `text-sm` was silently shrinking the room code (the single
+             *  most important thing on this screen) from 48px to 14px.
+             *  Restating the size as utilities here wins the cascade; the
+             *  spectator lobby renders the same class on a plain div and
+             *  was never affected. */}
             <Button
               variant="ghost"
               onClick={copy}
-              title="click to copy"
-              className="room-code h-auto p-0 hover:bg-transparent"
+              aria-label={`Copy room code ${ctx.roomCode.split("").join(" ")}`}
+              className="room-code h-auto gap-3 px-2 py-1 -ml-2 text-[48px] max-[500px]:text-[36px] leading-none tracking-[0.05em] hover:bg-muted"
             >
               {/* Per-character stagger so the code feels like it just got
                *  pulled out of a hat. Single animation, no layout shift —
                *  motion.span uses inline-block to honour the y-transform. */}
               <motion.span
-                aria-label={ctx.roomCode}
+                aria-hidden
                 initial="initial"
                 animate="animate"
                 variants={{
@@ -296,16 +329,28 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                   </motion.span>
                 ))}
               </motion.span>
+              {/* Visible copy affordance. The only cue before was a `title`
+               *  tooltip — invisible on touch and to keyboard users. */}
+              <Copy
+                strokeWidth={1.7}
+                className="size-[16px] text-muted-foreground"
+                aria-hidden
+              />
             </Button>
+            {/* One sharing control per screen: the identical icon button
+             *  that used to sit here duplicated the one in the top chrome,
+             *  which is hidden in the lobby for exactly this reason. */}
             <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Share room"
+              variant="outline"
               onClick={ctx.openShare}
-              className="h-9 w-9 text-muted-foreground"
+              className="h-9 gap-2 rounded-[var(--radius)] px-3 text-[13px] font-medium shrink-0"
             >
               <Share2 strokeWidth={1.7} className="size-[15px]" />
+              Share link
             </Button>
+          </div>
+          <div className="t-label" style={{ marginTop: 8 }}>
+            Your friend joins with this code — tap it to copy.
           </div>
 
           <section style={{ marginTop: 28 }}>
@@ -316,7 +361,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               <Separator />
               <div className="players-row">
                 <div className="flex items-center gap-3">
-                  <Avatar name={hostName} />
+                  <Avatar name={hostName} side="host" />
                   {isHost ? (
                     <NameEditor
                       key={hostName}
@@ -338,7 +383,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               <div className="players-row">
                 <div className="flex items-center gap-3">
                   {ctx.guestPresent ? (
-                    <Avatar name={guestName} />
+                    <Avatar name={guestName} side="guest" />
                   ) : (
                     <Avatar
                       name="?"
@@ -422,9 +467,14 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               </div>
               <Separator />
               <div className="settings-row">
-                <span id={tieLabelId} className={SETTINGS_LABEL}>
-                  Tie behavior
-                </span>
+                <div className="min-w-0 pr-3">
+                  <span id={tieLabelId} className={SETTINGS_LABEL}>
+                    Tie behavior
+                  </span>
+                  {/* replay / split / nobody meant nothing without a gloss;
+                   *  the line tracks the current selection. */}
+                  <div className={SETTINGS_HINT}>{TIE_HINTS[tieBehavior]}</div>
+                </div>
                 <ToggleGroup
                   aria-labelledby={tieLabelId}
                   disabled={!isHost}
@@ -463,9 +513,24 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               </div>
               <Separator />
               <div className="settings-row">
-                <Label htmlFor="lobby-allow-proper" className={SETTINGS_LABEL}>
-                  Allow proper nouns
-                </Label>
+                <div className="min-w-0 pr-3">
+                  {/* Renamed: with this off, validation requires the word to
+                   *  be in the ENABLE game lexicon — which rejects plenty of
+                   *  ordinary words ("tech") that have nothing to do with
+                   *  proper nouns. The old label promised something the
+                   *  setting doesn't do. */}
+                  <Label
+                    htmlFor="lobby-allow-proper"
+                    className={SETTINGS_LABEL_CLICKABLE}
+                  >
+                    Allow slang &amp; proper nouns
+                  </Label>
+                  <div className={SETTINGS_HINT}>
+                    {allowProperNouns
+                      ? "Anything the dictionary knows counts"
+                      : "Strict: only words in the game word list"}
+                  </div>
+                </div>
                 <Switch
                   id="lobby-allow-proper"
                   disabled={!isHost}
@@ -475,9 +540,17 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               </div>
               <Separator />
               <div className="settings-row">
-                <Label htmlFor="lobby-audio-defs" className={SETTINGS_LABEL}>
-                  Audio definitions
-                </Label>
+                <div className="min-w-0 pr-3">
+                  <Label
+                    htmlFor="lobby-audio-defs"
+                    className={SETTINGS_LABEL_CLICKABLE}
+                  >
+                    Audio definitions
+                  </Label>
+                  <div className={SETTINGS_HINT}>
+                    Play the winning word out loud
+                  </div>
+                </div>
                 <Switch
                   id="lobby-audio-defs"
                   disabled={!isHost}
@@ -487,9 +560,17 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
               </div>
               <Separator />
               <div className="settings-row">
-                <Label htmlFor="lobby-length-bonus" className={SETTINGS_LABEL}>
-                  +0.5 per extra letter
-                </Label>
+                <div className="min-w-0 pr-3">
+                  <Label
+                    htmlFor="lobby-length-bonus"
+                    className={SETTINGS_LABEL_CLICKABLE}
+                  >
+                    +0.5 per extra letter
+                  </Label>
+                  <div className={SETTINGS_HINT}>
+                    Longer words than the minimum score more
+                  </div>
+                </div>
                 <Switch
                   id="lobby-length-bonus"
                   disabled={!isHost}

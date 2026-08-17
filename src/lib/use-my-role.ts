@@ -9,6 +9,15 @@ type State = {
   role: ResolvedRole;
   /** True until /me (and /join, if needed) has resolved. */
   resolving: boolean;
+  /**
+   * True when role resolution failed for a reason that isn't "this room is
+   * full" — a network blip, a 5xx, a rate limit. Previously all of these
+   * silently resolved to `spectator`, which quietly locked a legitimate
+   * host or guest out of their own match with no message and no way back.
+   */
+  failed: boolean;
+  /** Re-run resolution after a failure. */
+  retry: () => void;
 };
 
 type Opts = {
@@ -28,6 +37,9 @@ type Opts = {
   applyState?: (state: PersistedGameState) => void;
 };
 
+/** Delay before the single automatic retry after a failed resolution. */
+const AUTO_RETRY_MS = 1_500;
+
 /**
  * Resolves the caller's role for a room and auto-claims the guest slot if
  * unoccupied.
@@ -37,14 +49,15 @@ type Opts = {
  *   2. If 'guest_unclaimed', POST /join with name → role
  *   3. Settle on a final role
  *
- * `resolving` is derived from inputs rather than stored, so the initial
- * render (clientId="" during SSR) shows resolving=false; once the
- * useSyncExternalStore-backed clientId hydrates, the effect runs and role
- * gets set. This avoids the setState-in-effect lint while still handling
- * the post-hydration transition correctly.
+ * Only two outcomes produce `spectator`: the server says so, or /join
+ * reports the seat is taken (403). Everything else is reported as a
+ * failure the caller can retry, because "we couldn't reach the server" and
+ * "you're a spectator" are very different things to tell a player.
  */
 export function useMyRole({ code, clientId, name, applyState }: Opts): State {
   const [role, setRole] = React.useState<ResolvedRole>(null);
+  const [failed, setFailed] = React.useState(false);
+  const [attempt, setAttempt] = React.useState(0);
   // Keep `applyState` reachable inside the async resolver without
   // listing it in the effect deps — `applyState` is React's setState
   // (stable identity), but listing it would force a re-run if the
@@ -54,9 +67,26 @@ export function useMyRole({ code, clientId, name, applyState }: Opts): State {
     applyStateRef.current = applyState;
   });
 
+  const retry = React.useCallback(() => {
+    setFailed(false);
+    setAttempt((n) => n + 1);
+  }, []);
+
   React.useEffect(() => {
     if (!code || !clientId) return;
     let cancelled = false;
+    let autoRetry: ReturnType<typeof setTimeout> | null = null;
+
+    const fail = () => {
+      if (cancelled) return;
+      // One automatic retry for transient blips; after that the caller
+      // surfaces a retry control.
+      if (attempt === 0) {
+        autoRetry = setTimeout(() => setAttempt((n) => n + 1), AUTO_RETRY_MS);
+        return;
+      }
+      setFailed(true);
+    };
 
     (async () => {
       try {
@@ -66,21 +96,28 @@ export function useMyRole({ code, clientId, name, applyState }: Opts): State {
           body: JSON.stringify({ clientId }),
         });
         if (!meRes.ok) {
-          if (!cancelled) setRole("spectator");
+          fail();
           return;
         }
         const meData = (await meRes.json()) as { role?: string };
 
         if (meData.role === "host" || meData.role === "guest") {
-          if (!cancelled) setRole(meData.role);
+          if (!cancelled) {
+            setFailed(false);
+            setRole(meData.role);
+          }
           return;
         }
         if (meData.role === "spectator") {
-          if (!cancelled) setRole("spectator");
+          // Authoritative: both seats are held by other clients.
+          if (!cancelled) {
+            setFailed(false);
+            setRole("spectator");
+          }
           return;
         }
         if (meData.role !== "guest_unclaimed") {
-          if (!cancelled) setRole("spectator");
+          fail();
           return;
         }
 
@@ -105,25 +142,37 @@ export function useMyRole({ code, clientId, name, applyState }: Opts): State {
             if (joinData.state && applyStateRef.current) {
               applyStateRef.current(joinData.state);
             }
+            setFailed(false);
             setRole(joinData.role);
             return;
           }
+          fail();
+          return;
         }
-        setRole("spectator");
+        if (joinRes.status === 403) {
+          // Someone else claimed the seat between /me and /join.
+          setFailed(false);
+          setRole("spectator");
+          return;
+        }
+        fail();
       } catch (err) {
         console.warn("[useMyRole] resolution failed", err);
-        if (!cancelled) setRole("spectator");
+        fail();
       }
     })();
 
     return () => {
       cancelled = true;
+      if (autoRetry) clearTimeout(autoRetry);
     };
-  }, [code, clientId, name]);
+  }, [code, clientId, name, attempt]);
 
   const inRoom = !!code && !!clientId;
   return {
     role: inRoom ? role : null,
-    resolving: inRoom && role === null,
+    resolving: inRoom && role === null && !failed,
+    failed: inRoom && failed && role === null,
+    retry,
   };
 }

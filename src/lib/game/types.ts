@@ -12,6 +12,12 @@ export type UsedWord = {
   word: string;
   ipa: string;
   by: string;
+  /**
+   * Which seat played the word. The match-end summary groups by this rather
+   * than by `by` (a display name), so two players who happen to choose the
+   * same name don't collapse into one column.
+   */
+  bySide: "host" | "guest" | "split";
   /** Time from raceStartedAt to submission, in ms. Shown as "x.x s" in
    *  the match-end summary cells; absent for entries pre-dating the
    *  field. */
@@ -52,6 +58,19 @@ export type GameCtx = {
    * a roomCode. Phase 7 will read this from a server role-resolution call.
    */
   meIsHost: boolean;
+  /**
+   * Which seat the local viewer holds, or null for spectators. Needed by
+   * the forfeit path, which awards the round to whoever is still here.
+   */
+  mySide: "host" | "guest" | null;
+  /**
+   * True when this client is the one driving phase transitions (reveal →
+   * race, timeout, next round, forfeit). Normally the host; the guest
+   * takes over once the host has been absent from presence for a few
+   * seconds, so a host who closes their tab can no longer freeze the
+   * remaining player's game forever.
+   */
+  meIsReferee: boolean;
   letterStart: string;
   letterEnd: string;
   word: string;
@@ -97,7 +116,21 @@ export type GameCtx = {
    * (they have no opponent).
    */
   opponentOnline: boolean;
+  /**
+   * True once the server has registered the opponent's word for this round
+   * (their attempt is sitting in `pendingResult`). Replaces the old
+   * hard-coded "…is typing" line, which claimed activity the app had no
+   * signal for — and kept claiming it while the disconnect banner said the
+   * same player had left.
+   */
+  opponentSubmitted: boolean;
   used: UsedWord[];
+  /**
+   * How each finished round ended. Lets the match-end summary label rounds
+   * that produced no word (forfeit, timeout, tie) instead of showing an
+   * empty row next to a score that went up anyway.
+   */
+  roundOutcomes: NonNullable<PersistedGameState["rounds"]>;
   roomCode: string;
   shareOpen: boolean;
   reconnectOpen: boolean;

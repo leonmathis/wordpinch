@@ -43,10 +43,10 @@ function StaggeredResultWord({
     >
       {word.split("").map((c, i) => {
         const isAnchor = i === 0 || i === word.length - 1;
-        // Match the original casing rule: anchors carry the word's
-        // own case (uppercase from the server), interior chars
-        // lowercase for the playful display.
-        const display = isAnchor ? c : c.toLowerCase();
+        // All lowercase, with the anchor letters carrying extra weight.
+        // Mixing cases ("TootH") made a correct word look like a typo —
+        // and the side-by-side tie view already renders lowercase.
+        const display = c.toLowerCase();
         return (
           <motion.span
             key={`${word}-${i}`}
@@ -108,8 +108,10 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   // ref-identity changes whenever the broadcast lands, which would reset
   // the 5s timer mid-countdown.
   const actionsRef = React.useRef(ctx.actions);
+  const refereeRef = React.useRef(ctx.meIsReferee);
   React.useEffect(() => {
     actionsRef.current = ctx.actions;
+    refereeRef.current = ctx.meIsReferee;
   });
   // The auto-advance is shorter for replay_pending (just enough to read
   // both attempts) and fires `replayRound` instead of `nextRound`. Same
@@ -122,18 +124,25 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   const advanceMs = fireReplay ? 4200 : 5200;
   React.useEffect(() => {
     let cancelled = false;
-    const t = setTimeout(() => {
+    // Retried while this phase is mounted: the referee role can move to the
+    // guest a few seconds in (host closed their tab), and without a retry
+    // the result screen was a terminal state — advance bar drained, nothing
+    // ever happened, no way out.
+    const advance = () => {
       if (cancelled) return;
       const a = actionsRef.current;
-      if (!a.ready || !ctx.meIsHost) return;
+      if (!a.ready || !refereeRef.current) return;
       if (fireReplay) void a.replayRound();
       else void a.nextRound();
-    }, advanceMs);
+    };
+    const t = setTimeout(advance, advanceMs);
+    const retry = setInterval(advance, advanceMs + 2500);
     return () => {
       cancelled = true;
       clearTimeout(t);
+      clearInterval(retry);
     };
-  }, [ctx.meIsHost, advanceMs, fireReplay]);
+  }, [advanceMs, fireReplay]);
 
   // A round can end via six shapes:
   //   1. Single winner    — winner = 'host' | 'guest', word + IPA + defs set
@@ -332,7 +341,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                         className="flex items-center gap-2"
                         style={{ marginBottom: 6 }}
                       >
-                        <Avatar name={playerName} size={20} />
+                        <Avatar name={playerName} size={20} side={a.by} />
                         <span className="t-label-up">{playerName}</span>
                       </div>
                       <h2
@@ -538,7 +547,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                 );
               })()}
             </div>
-            {ctx.meIsHost ? (
+            {ctx.meIsReferee ? (
               <Button
                 variant="link"
                 onClick={() => {
@@ -555,7 +564,19 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
             ) : null}
           </div>
 
-          <div className="advance-bar" style={{ marginTop: 14 }}>
+          {/* The fill duration is driven by the same value that schedules the
+           *  advance. It was hard-coded to 5s in CSS while the replay path
+           *  advanced at 4.2s, so the bar promised time the round didn't
+           *  have. */}
+          <div
+            className="advance-bar"
+            style={
+              {
+                marginTop: 14,
+                "--advance-duration": `${advanceMs}ms`,
+              } as React.CSSProperties
+            }
+          >
             <i />
           </div>
         </div>

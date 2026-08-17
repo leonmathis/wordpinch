@@ -6,10 +6,21 @@ import { useClientId, useIsMounted, useStoredString } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 const CODE_REGEX = /^[A-HJ-NP-Z2-9]{4}$/;
 // Hoisted to avoid re-creating per keystroke.
 const NON_CODE_CHAR_REGEX = /[^A-HJ-NP-Z2-9]/g;
+// Ambiguous glyphs the code alphabet deliberately omits. Typing one used to
+// be silently swallowed, leaving Join disabled with no explanation.
+const AMBIGUOUS_CHAR_REGEX = /[IO01]/;
+
+/** Turns a `Retry-After` header (seconds) into "in 4 minutes" / "in 30 seconds". */
+function formatRetryAfter(seconds: number | null): string {
+  if (!seconds || seconds <= 0) return "in a moment";
+  if (seconds < 90) return `in ${seconds} seconds`;
+  return `in ${Math.ceil(seconds / 60)} minutes`;
+}
 
 export function Landing() {
   const router = useRouter();
@@ -20,7 +31,13 @@ export function Landing() {
   const [name, setName] = useStoredString("name");
   const [code, setCode] = React.useState("");
   const [creating, setCreating] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  // Two independent error slots. A single shared one meant a failed
+  // "Create new room" rendered its message under the room-code field and
+  // marked that input aria-invalid — pointing screen readers and eyes at
+  // the wrong control.
+  const [joinError, setJoinError] = React.useState<string | null>(null);
+  const [createError, setCreateError] = React.useState<string | null>(null);
+  const [codeNotice, setCodeNotice] = React.useState<string | null>(null);
 
   // Gate the `disabled` props on isMounted. On the server and during the
   // initial hydration render isMounted is false, so the rendered HTML
@@ -35,7 +52,7 @@ export function Landing() {
     e.preventDefault();
     const trimmed = code.trim().toUpperCase();
     if (!CODE_REGEX.test(trimmed)) {
-      setError("Code must be 4 letters/digits (no I, O, 0, 1)");
+      setJoinError("Room codes are 4 characters — letters and digits only.");
       return;
     }
     router.push(`/r/${trimmed}`);
@@ -44,7 +61,7 @@ export function Landing() {
   const handleCreate = async () => {
     if (!clientId || creating) return;
     setCreating(true);
-    setError(null);
+    setCreateError(null);
     const trimmedName = name.trim().slice(0, 32);
     try {
       const res = await fetch("/api/rooms", {
@@ -57,14 +74,27 @@ export function Landing() {
       });
       const data = (await res.json()) as { code?: string; error?: string };
       if (!res.ok || !data.code) {
-        setError(data.error ?? "Failed to create room");
+        if (res.status === 429) {
+          const retry = Number.parseInt(res.headers.get("Retry-After") ?? "", 10);
+          setCreateError(
+            `Too many rooms created from this network. Try again ${formatRetryAfter(
+              Number.isFinite(retry) ? retry : null
+            )} — or join a friend's room with their code.`
+          );
+        } else {
+          setCreateError(
+            data.error
+              ? `Couldn't create a room: ${data.error}`
+              : "Couldn't create a room. Try again."
+          );
+        }
         setCreating(false);
         return;
       }
       router.push(`/r/${data.code}`);
     } catch (err) {
       console.error("[Landing] create error", err);
-      setError("Network error — try again");
+      setCreateError("Network error — check your connection and try again.");
       setCreating(false);
     }
   };
@@ -81,11 +111,7 @@ export function Landing() {
             and you both race to type a word that starts and ends with them.
           </p>
 
-          <form
-            onSubmit={handleJoin}
-            className="mx-auto w-full"
-            style={{ maxWidth: 360 }}
-          >
+          <div className="mx-auto w-full" style={{ maxWidth: 360 }}>
             <Label htmlFor="name" className="t-label-up block mb-2">
               Your name
             </Label>
@@ -97,51 +123,96 @@ export function Landing() {
               maxLength={32}
               onChange={(e) => setName(e.target.value.slice(0, 32))}
             />
-            <Label htmlFor="room" className="t-label-up block mb-2">
-              Join a room
-            </Label>
-            <Input
-              id="room"
-              className="font-mono h-[38px] rounded-[var(--radius)] text-[14px] uppercase"
-              placeholder="SLATE"
-              value={code}
-              maxLength={4}
-              onChange={(e) => {
-                setCode(e.target.value.toUpperCase().replace(NON_CODE_CHAR_REGEX, ""));
-                if (error) setError(null);
-              }}
-              aria-describedby={error ? "room-error" : undefined}
-              aria-invalid={error ? true : undefined}
-            />
+
+            {/* Primary path for a first-time visitor: they have no code to
+             *  type, so "Create new room" carries the filled button and the
+             *  join form sits below it as the secondary route. */}
             <Button
-              type="submit"
-              className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium mt-3"
-              disabled={joinDisabled}
+              type="button"
+              onClick={handleCreate}
+              disabled={createDisabled}
+              className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
             >
-              Join
+              {creating ? "Creating…" : "Create new room"}
             </Button>
-            {error ? (
+            {createError ? (
               <div
-                id="room-error"
                 role="alert"
                 className="t-label text-center mt-2"
                 style={{ color: "var(--destructive)" }}
               >
-                {error}
+                {createError}
               </div>
             ) : null}
-            <div className="text-center mt-3">
-              <Button
-                type="button"
-                variant="link"
-                onClick={handleCreate}
-                disabled={createDisabled}
-                className="link-underline h-auto p-0 font-mono text-[13px] text-foreground no-underline hover:no-underline disabled:opacity-50"
-              >
-                {creating ? "Creating…" : "Create new room"}
-              </Button>
+
+            <div className="flex items-center gap-3" style={{ marginTop: 24, marginBottom: 20 }}>
+              <Separator className="flex-1" />
+              <span className="t-label">or</span>
+              <Separator className="flex-1" />
             </div>
-          </form>
+
+            <form onSubmit={handleJoin}>
+              <Label htmlFor="room" className="t-label-up block mb-2">
+                Join with a room code
+              </Label>
+              <Input
+                id="room"
+                className="font-mono h-[38px] rounded-[var(--radius)] text-[14px] uppercase"
+                placeholder="K7QM"
+                value={code}
+                maxLength={4}
+                onChange={(e) => {
+                  const raw = e.target.value.toUpperCase();
+                  const cleaned = raw.replace(NON_CODE_CHAR_REGEX, "");
+                  setCode(cleaned);
+                  // Tell the user why a character vanished instead of just
+                  // eating it — I/O/0/1 are excluded from the alphabet so
+                  // codes can be read aloud without ambiguity. The notice
+                  // sticks until the field is cleared: it's the *next*
+                  // keystroke that most needs the explanation still on
+                  // screen.
+                  if (AMBIGUOUS_CHAR_REGEX.test(raw)) {
+                    setCodeNotice(
+                      "Room codes never use I, O, 0 or 1 — check the code again."
+                    );
+                  } else if (cleaned.length === 0) {
+                    setCodeNotice(null);
+                  }
+                  if (joinError) setJoinError(null);
+                }}
+                aria-describedby={
+                  joinError ? "room-error" : codeNotice ? "room-notice" : "room-hint"
+                }
+                aria-invalid={joinError ? true : undefined}
+              />
+              <div id="room-hint" className="t-label mt-2">
+                4 characters · no I, O, 0 or 1
+              </div>
+              {codeNotice ? (
+                <div id="room-notice" role="status" className="t-label mt-1">
+                  {codeNotice}
+                </div>
+              ) : null}
+              <Button
+                type="submit"
+                variant="outline"
+                className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium mt-3"
+                disabled={joinDisabled}
+              >
+                Join
+              </Button>
+              {joinError ? (
+                <div
+                  id="room-error"
+                  role="alert"
+                  className="t-label text-center mt-2"
+                  style={{ color: "var(--destructive)" }}
+                >
+                  {joinError}
+                </div>
+              ) : null}
+            </form>
+          </div>
         </div>
       </div>
     </>
