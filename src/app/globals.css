@@ -235,7 +235,10 @@
   .wp-counter {
     @apply font-mono text-[13px] text-muted-foreground tabular-nums;
   }
-  .wp-icons { @apply flex gap-0.5; }
+  /* gap-2 (8px), not gap-0.5: the icon buttons carry a 4px-per-side
+   * invisible hit area, and at 2px spacing those overlapped so the
+   * left-hand icon became hard to hit on touch. */
+  .wp-icons { @apply flex gap-2; }
 
   /* Flow container for the reconnect / role-error banners. The top padding
    * clears the absolutely-positioned chrome; because this sits above
@@ -447,6 +450,9 @@
      * --advance-duration), so the bar can't finish late or early. */
     animation: advance-fill var(--advance-duration, 5s) linear both;
   }
+  /* Held while the referee is reading the result (pointer or focus inside
+   * the frame) — the bar freezes with the countdown it represents. */
+  .advance-bar[data-held="true"] > i { animation-play-state: paused; }
 
   .score-delta {
     @apply font-mono inline-block;

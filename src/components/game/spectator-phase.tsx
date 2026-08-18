@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye } from "lucide-react";
 import { Avatar } from "./avatar";
+import { RoundsTable } from "./rounds-table";
 
 const RACE_INPUT_OVERRIDES =
   "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
@@ -292,6 +293,15 @@ function SpectatorMatchEnd({ ctx }: { ctx: GameCtx }) {
       >
         {ctx.you.score} · {ctx.them.score}
       </div>
+
+      {/* Spectators used to get the headline and nothing else — no way to
+       *  see what was actually played. Same summary the players get. */}
+      <section className="w-full" style={{ marginTop: 28 }}>
+        <div className="t-label-up" style={{ marginBottom: 8 }}>
+          Rounds
+        </div>
+        <RoundsTable ctx={ctx} />
+      </section>
     </div>
   );
 }

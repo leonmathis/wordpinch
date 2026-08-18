@@ -42,29 +42,32 @@ function useRaceTimer(
     // it's also cleaned up so a fast unmount within the same tick can't
     // setState on an unmounted component.
     const seed = setTimeout(() => setLeft(total), 0);
-    let fired = false;
     const i = setInterval(() => {
       // Hold the clock while the opponent's gone — the timer resumes when
       // presence sees them again. The 10 s grace timer runs in parallel
       // and forfeits the round if they stay missing.
       if (pausedRef.current) return;
-      setLeft((s) => {
-        if (s <= 1) {
-          if (!fired) {
-            fired = true;
-            clearInterval(i);
-            onExpireRef.current?.();
-          }
-          return 0;
-        }
-        return s - 1;
-      });
+      // Pure updater. This used to end the round from *inside* the
+      // updater (clearing the interval and POSTing the timeout), which
+      // React is free to run more than once — so the round could be
+      // declared twice, or skipped because the guard flag had already
+      // been flipped by a discarded invocation.
+      setLeft((s) => Math.max(0, s - 1));
     }, 1000);
     return () => {
       clearTimeout(seed);
       clearInterval(i);
     };
   }, [total]);
+
+  // Expiry lives in its own effect, driven by the committed value, so it
+  // fires exactly once per mount no matter how the updater was invoked.
+  const firedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (left > 0 || firedRef.current) return;
+    firedRef.current = true;
+    onExpireRef.current?.();
+  }, [left]);
 
   return left;
 }
@@ -289,8 +292,14 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   return (
     <>
       <div className="wp-body" style={{ paddingTop: 56 }}>
+        {/* `role="presentation"`: the tap handler is a touch convenience
+         *  (tapping blank space opens the keyboard), not an interactive
+         *  control. Keyboard and screen-reader users reach the input
+         *  directly — it autofocuses on mount and is the first tab stop —
+         *  so this element must not announce itself as clickable. */}
         <div
           className="wp-frame scene"
+          role="presentation"
           onClick={focusInput}
         >
           {paused ? <OpponentAwayBanner ctx={ctx} /> : null}

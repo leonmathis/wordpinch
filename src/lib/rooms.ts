@@ -120,9 +120,9 @@ export async function getRoomByCode(
  * `nextRound` → matchend POST lands. Without this guard the host would
  * write back stale scores and the matchend screen would flash
  * "you won" → "tied" the moment the near-miss broadcast caught up.
- * On the matchend transition we always take `scores` and `usedWords`
- * from the current DB row, ignoring whatever the client sent — the
- * client never holds authoritative score info anyway.
+ * On the matchend transition we always take `scores`, `usedWords` and
+ * `rounds` from the current DB row, ignoring whatever the client sent —
+ * the client never holds authoritative score info anyway.
  */
 export async function updateRoomState(opts: {
   code: string;
@@ -160,6 +160,11 @@ export async function updateRoomState(opts: {
         ...opts.state,
         scores: currentState.scores,
         usedWords: currentState.usedWords,
+        // `rounds` travels with `scores`: both are written by whichever
+        // action resolved the last round, so taking one from the DB and
+        // the other from the client's snapshot could show a summary that
+        // disagrees with the score line.
+        rounds: currentState.rounds,
       };
     }
   }

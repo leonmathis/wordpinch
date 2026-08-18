@@ -13,14 +13,34 @@ const PICK_INPUT_OVERRIDES =
 // Hoisted to module scope — fires on every keystroke.
 const NON_ALPHA_REGEX = /[^A-Z]/g;
 
+/**
+ * How long to wait, after locking, before offering a way out of a stalled
+ * pick. Nothing else resolves this state: no timer runs during pick, and
+ * the forfeit path only covers an opponent who has actually disconnected —
+ * so an idle-but-connected opponent left the other player waiting forever.
+ * Long enough that it can't be used to rush someone who is thinking.
+ */
+const IDLE_PROMPT_MS = 45_000;
+
 export function PickPhase({ ctx }: { ctx: GameCtx }) {
   const [locked, setLocked] = React.useState(false);
   const [locking, setLocking] = React.useState(false);
   const [val, setVal] = React.useState("");
+  const [idleTooLong, setIdleTooLong] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (!locked && inputRef.current) inputRef.current.focus();
+  }, [locked]);
+
+  // Start counting once this player has locked and is just waiting.
+  React.useEffect(() => {
+    if (!locked) {
+      const reset = setTimeout(() => setIdleTooLong(false), 0);
+      return () => clearTimeout(reset);
+    }
+    const t = setTimeout(() => setIdleTooLong(true), IDLE_PROMPT_MS);
+    return () => clearTimeout(t);
   }, [locked]);
 
   const lock = async () => {
@@ -136,6 +156,28 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
                 >
                   Change letter
                 </Button>
+
+                {/* Escape hatch for an opponent who is connected but idle.
+                 *  Resolves the round as "out of time" — the same outcome
+                 *  as running down the race clock — so using it can never
+                 *  win anyone a point. */}
+                {idleTooLong && ctx.opponentOnline ? (
+                  <div className="flex flex-col items-center gap-2 mt-2">
+                    <div className="t-label text-center">
+                      {ctx.them.name}{" "}
+                      still hasn&rsquo;t picked.
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (ctx.actions.ready) void ctx.actions.skipStalledRound();
+                      }}
+                      className="h-8 rounded-[var(--radius)] px-3 text-[13px]"
+                    >
+                      Skip this round
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

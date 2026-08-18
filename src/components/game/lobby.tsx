@@ -149,7 +149,7 @@ function NumberStepper({
         onClick={dec}
         disabled={disabled || local <= min}
         aria-label={ariaLabel ? `Decrease ${ariaLabel.toLowerCase()}` : "Decrease"}
-        className="h-9 w-9 rounded-full font-mono text-[14px]"
+        className="h-9 w-9 rounded-full font-mono text-[14px] relative after:absolute after:-inset-1 after:content-['']"
       >
         −
       </Button>
@@ -166,7 +166,7 @@ function NumberStepper({
         onClick={inc}
         disabled={disabled || local >= max}
         aria-label={ariaLabel ? `Increase ${ariaLabel.toLowerCase()}` : "Increase"}
-        className="h-9 w-9 rounded-full font-mono text-[14px]"
+        className="h-9 w-9 rounded-full font-mono text-[14px] relative after:absolute after:-inset-1 after:content-['']"
       >
         +
       </Button>
@@ -213,7 +213,11 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
   // on ctx.you/ctx.them isn't useful here, where rows are labelled by role.
   const isHost = ctx.meIsHost;
   const { hostName, guestName } = ctx;
-  const [, setStoredName] = useStoredString("name");
+  const [storedName, setStoredName] = useStoredString("name");
+  // Someone who arrives on an invite link never passes the landing page, so
+  // they sit in the roster as the fallback "guest" with no idea they can
+  // change it. Nudge them (and a host who created a room without a name).
+  const needsName = !storedName.trim();
   const handleRename = React.useCallback(
     (next: string) => {
       setStoredName(next);
@@ -354,8 +358,14 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
           </div>
 
           <section style={{ marginTop: 28 }}>
-            <div className="t-label-up" style={{ marginBottom: 8 }}>
-              Players
+            <div className="flex items-baseline justify-between gap-3" style={{ marginBottom: 8 }}>
+              <div className="t-label-up">Players</div>
+              {needsName ? (
+                <div className="t-label text-right">
+                  Add your name below so {isHost ? "your guest" : hostName}{" "}
+                  knows who they&rsquo;re playing
+                </div>
+              ) : null}
             </div>
             <div>
               <Separator />

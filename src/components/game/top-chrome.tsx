@@ -21,9 +21,12 @@ type Props = {
   showLeave?: boolean;
 };
 
-// 36px hit areas: `icon-xs` (24px) was below the comfortable touch minimum,
-// which mattered because these are the only persistent controls on mobile.
-const ICON_BUTTON = "size-9 text-muted-foreground";
+// 36px visually, 44px to the finger: `icon-xs` (24px) was well under the
+// comfortable touch minimum, and these are the only persistent controls on
+// mobile. The `after` pseudo-element extends the hit area without inflating
+// the icons; `.wp-icons` spaces them so the areas don't overlap.
+const ICON_BUTTON =
+  "size-9 text-muted-foreground relative after:absolute after:-inset-1 after:content-['']";
 
 export function TopChrome({
   round = 0,

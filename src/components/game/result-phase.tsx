@@ -14,6 +14,19 @@ type SuggestResponse = {
 };
 
 /**
+ * Rendered only if the API result went missing — never in normal play, but
+ * it keeps the definitions block from collapsing to nothing. Module scope so
+ * the array identity is stable across renders.
+ */
+const FALLBACK_DEFS = [
+  {
+    partOfSpeech: "noun",
+    definition: "No definition available.",
+    example: undefined,
+  },
+];
+
+/**
  * Per-character entrance for the round-winning word. Mirrors the room
  * code stagger in the lobby — each letter pops in with a slight scale +
  * y-rise, anchor letters (first / last) keep their bolder styling via
@@ -122,25 +135,45 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
     ctx.resultReason === "timeout" && ctx.settings.tieBehavior === "replay";
   const fireReplay = ctx.resultReason === "replay_pending" || isTimeoutReplay;
   const advanceMs = fireReplay ? 4200 : 5200;
+  // Holding the result screen: while the referee's pointer or keyboard
+  // focus is inside the frame, the countdown stops so they can finish
+  // reading the definition. Only the referee's client drives the actual
+  // transition, so only their hold is honoured — pausing the bar on a
+  // non-referee's screen would promise something it can't deliver.
+  const [held, setHeld] = React.useState(false);
+  const heldRef = React.useRef(false);
+  React.useEffect(() => {
+    heldRef.current = held;
+  });
+  const canHold = ctx.meIsReferee;
+  const hold = React.useCallback(() => setHeld(true), []);
+  const release = React.useCallback(() => setHeld(false), []);
+
   React.useEffect(() => {
     let cancelled = false;
+    let elapsed = 0;
+    let lastAttempt = 0;
+    const STEP_MS = 100;
+    const RETRY_MS = 2500;
     // Retried while this phase is mounted: the referee role can move to the
     // guest a few seconds in (host closed their tab), and without a retry
     // the result screen was a terminal state — advance bar drained, nothing
     // ever happened, no way out.
-    const advance = () => {
+    const tick = () => {
       if (cancelled) return;
+      if (!heldRef.current) elapsed += STEP_MS;
+      if (elapsed < advanceMs) return;
+      if (lastAttempt && elapsed - lastAttempt < RETRY_MS) return;
+      lastAttempt = elapsed;
       const a = actionsRef.current;
       if (!a.ready || !refereeRef.current) return;
       if (fireReplay) void a.replayRound();
       else void a.nextRound();
     };
-    const t = setTimeout(advance, advanceMs);
-    const retry = setInterval(advance, advanceMs + 2500);
+    const id = setInterval(tick, STEP_MS);
     return () => {
       cancelled = true;
-      clearTimeout(t);
-      clearInterval(retry);
+      clearInterval(id);
     };
   }, [advanceMs, fireReplay]);
 
@@ -254,21 +287,18 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   ]);
 
   const word = ctx.word;
-  // Fallback definitions only render when we somehow lost the API result —
-  // never used in normal play, but keeps the UI from showing blank.
-  const FALLBACK_DEFS = [
-    {
-      partOfSpeech: "noun",
-      definition: "No definition available.",
-      example: undefined,
-    },
-  ];
   const defs = ctx.definitions.length > 0 ? ctx.definitions : FALLBACK_DEFS;
 
   return (
     <>
       <div className="wp-body">
-        <div className="wp-frame scene">
+        <div
+          className="wp-frame scene"
+          onPointerEnter={canHold ? hold : undefined}
+          onPointerLeave={canHold ? release : undefined}
+          onFocusCapture={canHold ? hold : undefined}
+          onBlurCapture={canHold ? release : undefined}
+        >
           {/* Canonical names everywhere — the viewer-perspective ctx.you /
               ctx.them flip would otherwise show the guest seeing host's
               name when *they* (the guest) win. */}
@@ -407,8 +437,11 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
               </div>
 
               <div style={{ marginTop: 28 }}>
-                {defs.map((d, i) => (
-                  <div key={i} className="def-block">
+                {defs.map((d) => (
+                  <div
+                    key={`${d.partOfSpeech}-${d.definition.slice(0, 40)}`}
+                    className="def-block"
+                  >
                     <div className="def-label">{d.partOfSpeech || "—"}</div>
                     <div className="def">{d.definition}</div>
                     {d.example ? (
@@ -564,12 +597,21 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
             ) : null}
           </div>
 
+          {/* Says why nothing is moving — a frozen progress bar with no
+           *  explanation reads as broken. */}
+          {held ? (
+            <div className="t-label text-right" style={{ marginTop: 8 }}>
+              Paused while you read
+            </div>
+          ) : null}
+
           {/* The fill duration is driven by the same value that schedules the
            *  advance. It was hard-coded to 5s in CSS while the replay path
            *  advanced at 4.2s, so the bar promised time the round didn't
            *  have. */}
           <div
             className="advance-bar"
+            data-held={held ? "true" : undefined}
             style={
               {
                 marginTop: 14,

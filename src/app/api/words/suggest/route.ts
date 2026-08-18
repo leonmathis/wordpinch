@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server";
 import { getWordlist } from "@/lib/words/wordlist";
 
+/**
+ * Take `count` entries spread evenly across a bucket instead of the first N.
+ * Taking the head meant T→H always answered "tach teth toph tosh tush" — the
+ * alphabetically-first, and reliably the most obscure, words in the list.
+ * Sampling by stride keeps the response deterministic (so it still caches)
+ * while surfacing words players recognise.
+ */
+function spread(bucket: string[], count: number): string[] {
+  if (bucket.length <= count) return [...bucket];
+  const stride = bucket.length / count;
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) {
+    out.push(bucket[Math.floor(i * stride)]);
+  }
+  return out;
+}
+
 const LETTER_REGEX = /^[a-z]$/i;
 const MAX_SUGGESTIONS = 8;
 const MAX_AT_MIN_LENGTH = 6;
@@ -59,22 +76,6 @@ export async function GET(request: Request) {
     // (better cache key, no random feel for the player).
     for (const bucket of byLength.values()) bucket.sort();
 
-    /**
-     * Take `count` entries spread evenly across a bucket instead of the
-     * first N. Taking the head meant T→H always answered "tach teth toph
-     * tosh tush" — the alphabetically-first, and reliably the most obscure,
-     * words in the list. Sampling by stride keeps the response deterministic
-     * (so it still caches) while surfacing words players recognise.
-     */
-    const spread = (bucket: string[], count: number): string[] => {
-      if (bucket.length <= count) return [...bucket];
-      const stride = bucket.length / count;
-      const out: string[] = [];
-      for (let i = 0; i < count; i++) {
-        out.push(bucket[Math.floor(i * stride)]);
-      }
-      return out;
-    };
 
     const suggestions: string[] = [];
     const atMin = byLength.get(min);

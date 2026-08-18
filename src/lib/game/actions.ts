@@ -113,6 +113,14 @@ export type RoomActions = {
   ) => Promise<void>;
   /** Referee-only: time's up with no valid submission. */
   timeoutRound: () => Promise<void>;
+  /**
+   * Either player can end a pick phase that has stalled — the opponent is
+   * still connected but hasn't locked a letter, and nothing else resolves
+   * that state (the forfeit path only covers disconnects, and no timer runs
+   * during pick). Applies the same "out of time" semantics as a race
+   * timeout, so nobody can gain a point by using it.
+   */
+  skipStalledRound: () => Promise<void>;
   /** Referee-only. */
   nextRound: () => Promise<void>;
   /**
@@ -183,8 +191,11 @@ export function useRoomActions(opts: {
    * before either had written, and the second write dropped the first
    * change. Chaining them means each request reads the previous one's
    * result. (Only the host writes settings, so one queue is enough.)
+   *
+   * Lazily initialised — `useRef(Promise.resolve())` would allocate a fresh
+   * promise on every render and throw it away.
    */
-  const settingsQueue = React.useRef<Promise<void>>(Promise.resolve());
+  const settingsQueue = React.useRef<Promise<void> | null>(null);
 
   return React.useMemo<RoomActions>(() => {
     const isHost = role === "host";
@@ -311,7 +322,8 @@ export function useRoomActions(opts: {
           }
         };
         // Queue rather than fire: see `settingsQueue` above.
-        settingsQueue.current = settingsQueue.current.then(send, send);
+        const prev = settingsQueue.current ?? Promise.resolve();
+        settingsQueue.current = prev.then(send, send);
         await settingsQueue.current;
       },
 
@@ -337,75 +349,16 @@ export function useRoomActions(opts: {
         // resolver will commit the outcome shortly — don't overwrite it
         // with a 'none' timeout. The broadcast carries the resolved state.
         if (state.pendingResult) return;
+        await postState(timedOutState(state), "end the round");
+      },
 
-        // A timeout is conceptually the same as a simultaneous tie — no
-        // clear winner emerged — so we apply `tieBehavior` the same way
-        // `computeFinalState` does for a true tie. All three branches
-        // stamp `reason: "timeout"` so the result phase can label the
-        // outcome with the "out of time" suffix.
-        const tieBehavior = state.settings.tieBehavior;
-        if (tieBehavior === "replay") {
-          // Mirror the 'nobody' branch — park on the result screen so
-          // both players see the "out of time" header and a set of
-          // suggested words that would have worked. ResultPhase fires
-          // `replayRound` after the advance bar fills, because
-          // tieBehavior is 'replay'.
-          await postState(
-            {
-              ...state,
-              phase: "result",
-              result: {
-                winner: "none",
-                reason: "timeout",
-                submittedAt: Date.now(),
-              },
-            },
-            "end the round"
-          );
-          return;
-        }
-        if (tieBehavior === "split") {
-          await postState(
-            {
-              ...state,
-              phase: "result",
-              result: {
-                winner: "split",
-                reason: "timeout",
-                submittedAt: Date.now(),
-              },
-              rounds: appendOutcome(state, {
-                round: state.round,
-                winner: "split",
-                reason: "timeout",
-              }),
-              scores: {
-                host: state.scores.host + 1,
-                guest: state.scores.guest + 1,
-              },
-            },
-            "end the round"
-          );
-          return;
-        }
-        // 'nobody' (default for timeouts where no one earned the point)
-        await postState(
-          {
-            ...state,
-            phase: "result",
-            result: {
-              winner: "none",
-              reason: "timeout",
-              submittedAt: Date.now(),
-            },
-            rounds: appendOutcome(state, {
-              round: state.round,
-              winner: "none",
-              reason: "timeout",
-            }),
-          },
-          "end the round"
-        );
+      skipStalledRound: async () => {
+        if (!canPlay || !state) return;
+        // Pick only: the race has its own timer, and a disconnected
+        // opponent is handled by the forfeit path.
+        if (state.phase !== "pick") return;
+        if (state.pendingResult) return;
+        await postState(timedOutState(state), "skip the round");
       },
 
       nextRound: async () => {
@@ -510,6 +463,62 @@ export function useRoomActions(opts: {
       },
     };
   }, [state, role, canReferee, postState, code, clientId, applyState]);
+}
+
+/**
+ * The "ran out of time" outcome for the current round.
+ *
+ * A timeout is conceptually the same as a simultaneous tie — no clear
+ * winner emerged — so it applies `tieBehavior` exactly the way
+ * `computeFinalState` does for a real tie, and stamps `reason: "timeout"`
+ * so the result phase can label it with the "out of time" suffix. Shared by
+ * the race timer and by the manual skip out of a stalled pick, so the two
+ * can't drift apart.
+ */
+function timedOutState(state: PersistedGameState): PersistedGameState {
+  const submittedAt = Date.now();
+  const tieBehavior = state.settings.tieBehavior;
+
+  if (tieBehavior === "replay") {
+    // Park on the result screen so both players see the "out of time"
+    // header and the words that would have worked; ResultPhase fires
+    // `replayRound` once the advance bar fills. No outcome is recorded —
+    // the round hasn't finished, it's about to re-run.
+    return {
+      ...state,
+      phase: "result",
+      result: { winner: "none", reason: "timeout", submittedAt },
+    };
+  }
+
+  if (tieBehavior === "split") {
+    return {
+      ...state,
+      phase: "result",
+      result: { winner: "split", reason: "timeout", submittedAt },
+      rounds: appendOutcome(state, {
+        round: state.round,
+        winner: "split",
+        reason: "timeout",
+      }),
+      scores: {
+        host: state.scores.host + 1,
+        guest: state.scores.guest + 1,
+      },
+    };
+  }
+
+  // 'nobody' — the round ends with no points awarded.
+  return {
+    ...state,
+    phase: "result",
+    result: { winner: "none", reason: "timeout", submittedAt },
+    rounds: appendOutcome(state, {
+      round: state.round,
+      winner: "none",
+      reason: "timeout",
+    }),
+  };
 }
 
 /**
