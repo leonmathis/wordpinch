@@ -537,7 +537,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                   </Label>
                   <div className={SETTINGS_HINT}>
                     {allowProperNouns
-                      ? "Anything the dictionary knows counts"
+                      ? "Anything the dictionary or word list knows counts"
                       : "Strict: only words in the game word list"}
                   </div>
                 </div>

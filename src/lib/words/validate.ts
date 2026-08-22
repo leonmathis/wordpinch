@@ -14,7 +14,11 @@ export type ValidationResult = {
   /** First non-empty audio URL from the Free Dictionary API, if any. */
   audio?: string;
   definitions?: Definition[];
-  /** "api" if the Free Dictionary API responded, "wordlist" if we fell back. */
+  /**
+   * "api" — the Free Dictionary API vouched for the word (definitions attached).
+   * "wordlist" — accepted via ENABLE (API 404'd, was empty, or was unreachable).
+   * "rejected" — neither source knows it, or it failed a pre-check.
+   */
   source: "api" | "wordlist" | "rejected";
 };
 
@@ -84,9 +88,18 @@ type ValidateOpts = {
 };
 
 /**
- * Validates a word against the Free Dictionary API. Falls back to the ENABLE
- * wordlist (no phonetic / definitions) on API outage so the game keeps
- * working when dictionaryapi.dev is down.
+ * Validates a word against the Free Dictionary API, with the ENABLE wordlist
+ * as a second opinion in *both* modes:
+ *
+ *  - loose (allowProperNouns): valid if the API knows it OR it's in ENABLE.
+ *    The API's coverage is far thinner than ENABLE's — it 404s on ordinary
+ *    derived forms ("punisher", "polisher", "payor", "tinkerer") — so a 404
+ *    is not evidence that a word isn't real.
+ *  - strict: ENABLE membership is required (checked up front, before the API
+ *    call). The API only enriches the response with phonetic / definitions.
+ *
+ * The fallback also covers API outage, so the game keeps working when
+ * dictionaryapi.dev is down.
  *
  * Caller is expected to have already enforced:
  *  - format ([a-z]+)
@@ -115,6 +128,17 @@ export async function validateWord(
     }
   }
 
+  /**
+   * The API declined to vouch for the word — 404, empty body, or unreachable.
+   * ENABLE gets the final say either way. In strict mode membership was
+   * already proven above, so this costs nothing; in loose mode it's the
+   * lookup that keeps a thin dictionary from rejecting real words.
+   */
+  const decideFromWordlist = async (): Promise<ValidationResult> => {
+    const inList = enableHit || (await isInWordlist(word).catch(() => false));
+    return { valid: inList, word, source: inList ? "wordlist" : "rejected" };
+  };
+
   try {
     const res = await fetch(
       `${DICT_API}/${encodeURIComponent(word)}`,
@@ -122,20 +146,16 @@ export async function validateWord(
     );
 
     if (res.status === 404) {
-      // API doesn't know the word. If we already confirmed it via ENABLE
-      // (proper-nouns disallowed path), accept it without definitions.
-      if (enableHit) {
-        return { valid: true, word, source: "wordlist" };
-      }
-      return { valid: false, word, source: "api" };
+      // API doesn't know the word — that's a coverage gap, not a verdict.
+      // ENABLE decides.
+      return await decideFromWordlist();
     }
 
     if (res.ok) {
       const data = (await res.json()) as DictApiEntry[];
       const entry = data[0];
       if (!entry) {
-        if (enableHit) return { valid: true, word, source: "wordlist" };
-        return { valid: false, word, source: "api" };
+        return await decideFromWordlist();
       }
       const parsed = parseEntry(entry);
       return {
@@ -150,10 +170,6 @@ export async function validateWord(
     // Network / timeout / parse error → fall through to wordlist.
   }
 
-  // API failed. If we already passed ENABLE, accept without definitions.
-  if (enableHit) {
-    return { valid: true, word, source: "wordlist" };
-  }
-  const inList = await isInWordlist(word).catch(() => false);
-  return { valid: inList, word, source: "wordlist" };
+  // Non-OK status or a thrown request — same fallback.
+  return await decideFromWordlist();
 }

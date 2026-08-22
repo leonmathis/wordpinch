@@ -241,9 +241,12 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
         definitions?: { partOfSpeech: string; definition: string; example?: string }[];
       };
       if (!data.valid) {
+        // Loose mode checks the dictionary API *and* the game word list, so
+        // naming only the dictionary would misdescribe the rejection — and
+        // read as a lie for the words the API simply doesn't index.
         triggerReject(
           ctx.settings.allowProperNouns
-            ? `${val} isn't in the dictionary.`
+            ? `${val} isn't a word we know.`
             : `${val} isn't in the word list. Proper nouns and slang are off for this match.`
         );
         return;
