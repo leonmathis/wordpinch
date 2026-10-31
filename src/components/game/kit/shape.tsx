@@ -64,18 +64,24 @@ type ShapeProps = {
   children?: React.ReactNode;
 };
 
+/**
+ * Inline size for the SVG backdrops. Width/height attributes lose to CSS,
+ * and Button's `[&_svg]:size-4` icon rule shrank them to 16px inside it.
+ */
+const SVG_BOX = (size: number): React.CSSProperties => ({ width: size, height: size });
+
 function Backdrop({ kind, size, fill, tilt }: Required<Pick<ShapeProps, "kind" | "size" | "fill" | "tilt">>) {
   const edge = Math.round(size * OPTICAL_SCALE[kind]);
   if (kind === "star") {
     return (
-      <svg aria-hidden width={size} height={size} viewBox="0 0 200 200" className="absolute inset-0">
+      <svg aria-hidden width={size} height={size} viewBox="0 0 200 200" className="absolute inset-0" style={SVG_BOX(size)}>
         <polygon points={STAR_POINTS} fill={fill} stroke={fill} strokeWidth={18} strokeLinejoin="round" />
       </svg>
     );
   }
   if (kind === "flower") {
     return (
-      <svg aria-hidden width={size} height={size} viewBox="0 0 200 200" className="absolute inset-0">
+      <svg aria-hidden width={size} height={size} viewBox="0 0 200 200" className="absolute inset-0" style={SVG_BOX(size)}>
         <g fill={fill}>
           {FLOWER_CIRCLES.map(([cx, cy, r]) => (
             <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={r} />
@@ -125,6 +131,7 @@ export function Shape({
   const inset = Math.round(size * SAFE_INSET[kind]);
   return (
     <span
+      data-shape={kind}
       className={cn("relative inline-flex shrink-0 items-center justify-center text-[#141414]", className)}
       style={{ width: size, height: size, ...style }}
     >

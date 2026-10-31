@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { Avatar } from "@/components/game/avatar";
 import { AnchoredWord } from "@/components/game/kit/anchored-word";
 import { LetterSlots } from "@/components/game/kit/letter-slots";
-import { Shape, ShapeGlyph } from "@/components/game/kit/shape";
+import { ModeGrid } from "@/components/game/kit/mode-grid";
+import { ShapeGlyph } from "@/components/game/kit/shape";
 import { StatusPill } from "@/components/game/kit/status-pill";
 import { TopChrome } from "@/components/game/top-chrome";
 
@@ -83,24 +84,17 @@ function Column({ label }: { label: string }) {
       </Section>
 
       <Section title="Shapes with labels (160px, safe inset)">
-        <div className="grid grid-cols-2 gap-2.5" data-kit="mode-grid">
-          <Shape kind="square" size={160} fill="var(--shape-yellow)" tilt={-6}>
-            <span className="text-lg leading-[1.05] font-extrabold">Play a<br />friend</span>
-            <span className="text-xs font-bold">new room</span>
-          </Shape>
-          <Shape kind="star" size={160} fill="var(--shape-pink)">
-            <span className="text-lg leading-[1.05] font-extrabold">Daily<br />pinch</span>
-            <span className="text-xs font-bold">Q _ _ _ N</span>
-          </Shape>
-          <Shape kind="circle" size={160} fill="var(--shape-blue)">
-            <span className="text-lg leading-[1.05] font-extrabold">Quick<br />match</span>
-            <span className="text-xs font-bold">142 online</span>
-          </Shape>
-          <Shape kind="flower" size={160} fill="var(--shape-sage)">
-            <span className="text-lg leading-[1.05] font-extrabold">Pass the<br />phone</span>
-            <span className="text-xs font-bold">one device</span>
-          </Shape>
-        </div>
+        <ModeGrid
+          size={160}
+          data-kit="mode-grid"
+          className="justify-items-start"
+          modes={[
+            { id: "friend", kind: "square", fill: "var(--shape-yellow)", title: "Play a\nfriend", sub: "new room" },
+            { id: "daily", kind: "star", fill: "var(--shape-pink)", title: "Daily\npinch", sub: "Q _ _ _ N" },
+            { id: "quick", kind: "circle", fill: "var(--shape-blue)", title: "Quick\nmatch", sub: "142 online" },
+            { id: "pass", kind: "flower", fill: "var(--shape-sage)", title: "Pass the\nphone", sub: "one device" },
+          ]}
+        />
       </Section>
 
       <Section title="Glyphs (measured offsets)">

@@ -9,7 +9,14 @@ export const PREVIEW_ROOM = "K7QM";
  * Console errors that the dev preview produces by design: there is no real
  * room on the server, so seat resolution and realtime fail.
  */
-const EXPECTED_DEV_ERRORS = [/\/api\/rooms\/[A-Z0-9]{4}\/me/, /realtime/i, /Failed to load resource/];
+const EXPECTED_DEV_ERRORS = [
+  /\/api\/rooms\/[A-Z0-9]{4}\/me/,
+  /realtime/i,
+  /Failed to load resource/,
+  // React's dev-only performance track occasionally measures a server
+  // component with a negative start under parallel load. Not in prod.
+  /Failed to execute 'measure' on 'Performance'.*negative time stamp/,
+];
 
 export function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -19,7 +26,10 @@ export function collectConsoleErrors(page: Page): string[] {
     if (EXPECTED_DEV_ERRORS.some((re) => re.test(text))) return;
     errors.push(text);
   });
-  page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
+  page.on("pageerror", (err) => {
+    if (EXPECTED_DEV_ERRORS.some((re) => re.test(err.message))) return;
+    errors.push(`pageerror: ${err.message}`);
+  });
   return errors;
 }
 

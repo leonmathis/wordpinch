@@ -104,7 +104,8 @@ test.describe("/dev/kit", () => {
       const kinds = ["square", "star", "circle", "flower"];
       const out: Record<string, number> = {};
       for (const grid of Array.from(document.querySelectorAll('[data-kit="mode-grid"]'))) {
-        Array.from(grid.children).forEach((shape, i) => {
+        // Each mode is a Button wrapping its Shape.
+        Array.from(grid.children).map((b) => b.firstElementChild!).forEach((shape, i) => {
           const s = shape.getBoundingClientRect();
           const cx = s.left + s.width / 2, cy = s.top + s.height / 2;
           let w = Infinity;
@@ -122,6 +123,20 @@ test.describe("/dev/kit", () => {
     });
     console.log(`[clearance] ${test.info().project.name}: ${Object.entries(result).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(", ")}`);
     for (const [kind, px] of Object.entries(result)) expect(px, kind).toBeGreaterThanOrEqual(12);
+  });
+
+  test("star and flower backdrops fill their box, also inside buttons", async ({ page }) => {
+    const bad = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>("[data-shape] > svg")).flatMap((svg) => {
+        const box = svg.parentElement!.getBoundingClientRect();
+        const r = svg.getBoundingClientRect();
+        return Math.abs(r.width - box.width) > 0.5 || Math.abs(r.height - box.height) > 0.5
+          ? [`${svg.parentElement!.dataset.shape} ${r.width}x${r.height} in ${box.width}`]
+          : [];
+      })
+    );
+    expect(await page.locator('[data-kit="mode-grid"] button [data-shape="star"] > svg').count()).toBeGreaterThan(0);
+    expect(bad).toEqual([]);
   });
 
   test("touch targets are ≥44px", async ({ page }) => {

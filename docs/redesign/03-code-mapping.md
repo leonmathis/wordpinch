@@ -97,8 +97,8 @@ Legend:
 | `top-chrome.tsx` | D · Menu | RW → `TopBar` + `SettingsMenu` | theme toggle, mute, share and leave move into the menu. The 2px progress bar becomes round pills. The counter moves into the label. **Done in R3:** the component keeps the name `TopChrome` and its absolute slot (so `.wp-body` spacing is unchanged). The inline score stays in `ScoreHud` until R6–R8, to avoid showing it twice. `.wp-banners` starts at 66px because the 44px gear ends at 58px. The popover comes from `npx shadcn add popover`; the CLI wrongly imported `cn` from an npm package of that name and installed it, which was reverted to `@/lib/utils` |
 | `score-hud.tsx` | race/pick top bar | RW | inline score moves into `TopBar`; "Words played" becomes a pill (phone) / card (desktop) |
 | `letters-display.tsx` | everywhere | replace with `LetterSlots` | delete once unused |
-| `landing.tsx` | Step 2 · Landing | RW | mode grid of 4 `Shape` buttons + join row. **Name input removed** (lobby already has `NameEditor`, `lobby.tsx:182-206`, and the "add your name" hint, `lobby.tsx:363-368`). Create errors move under the grid. Daily, Quick and Pass shapes stay behind a feature flag until their F-PR ships |
-| `app/r/[code]/not-found.tsx` | Step 2 · 404 | RW | starburst 404 + `TopBar` |
+| `landing.tsx` | Step 2 · Landing | RW | mode grid of 4 `Shape` buttons + join row. **Name input removed** (lobby already has `NameEditor`, `lobby.tsx:182-206`, and the "add your name" hint, `lobby.tsx:363-368`). Create errors move under the grid. Daily, Quick and Pass shapes stay behind a feature flag until their F-PR ships. **Done in R4:** flags in `src/lib/features.ts` (plain consts, no env switch); with only "Play a friend" on, it renders as one 1.25× shape. The grid lives in `kit/mode-grid.tsx` so `/dev/kit` tests the same buttons. Fixed a latent `Shape` bug: Button's `[&_svg]:size-4` icon rule shrank star and flower backdrops to 16px, so SVG backdrops now size inline. The short-code join error is unreachable once hydrated, because Join stays disabled below 4 characters, as before |
+| `app/r/[code]/not-found.tsx` | Step 2 · 404 | RW | starburst 404 + `TopBar`. **Done in R4:** shared `not-found-screen.tsx`, also used by a new root `app/not-found.tsx`. In dev, `/r/XXXX` 404s log next-themes' "script tag" warning (predates R4, absent in `next start`) |
 | `lobby.tsx` | Step 2 · Lobby | R | settings in 3 cards (Game / Rules / Sound), no dividers; `NumberStepper` → `Stepper` (44px); guest view dimmed with "only {host} can change these"; New rows (no repeat, peek) added in F4 |
 | `pick-phase.tsx` | Step 2 · Pick | RW | single-letter input → **alphabet grid** (`role=radiogroup`). Typing a letter on a physical keyboard still selects it (keep a keydown handler); Enter locks. Locked state, "Change letter" and the 45s skip card keep their logic (`pick-phase.tsx:23,135-178`) |
 | `reveal-phase.tsx` | Step 2 · Reveal | RW | flower per beat (yellow/pink/sage), GO starburst, letters view with min-length line; **fix**: the inline fade-up has no reduced-motion guard (`reveal-phase.tsx:86`) |
@@ -177,6 +177,6 @@ R5–R9 only depend on R2 and touch separate files, so they can run in parallel.
 
 ## 8. Open points for the implementation start
 
-1. **Feature flags:** add a tiny `src/lib/features.ts` (const map) so the landing shapes for daily, quick and pass can ship hidden with R4. Decide whether flags may also be switched by env var.
+1. ~~**Feature flags**~~ done in R4 as a const map; no env switch.
 2. **Baseline screenshots:** commit them, or keep them local only?
 3. **`.claude/launch.json`:** keep only the `wordpinch-dev` entry (the design-scratch entry points at a session temp folder) and commit it, or leave it untracked.
