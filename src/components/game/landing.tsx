@@ -129,7 +129,16 @@ export function Landing() {
         ]
       : []),
     ...(FEATURES.quickMatch
-      ? [{ id: "quick", kind: "circle" as const, fill: "var(--shape-blue)", title: "Quick\nmatch", sub: "find a rival" }]
+      ? [
+          {
+            id: "quick",
+            kind: "circle" as const,
+            fill: "var(--shape-blue)",
+            title: "Quick\nmatch",
+            sub: "find a rival",
+            onSelect: () => router.push("/quick"),
+          },
+        ]
       : []),
     ...(FEATURES.passThePhone
       ? [{ id: "pass", kind: "flower" as const, fill: "var(--shape-sage)", title: "Pass the\nphone", sub: "one device" }]

@@ -53,17 +53,26 @@ function playTone({
   // Auto-resume — browsers suspend AudioContext until a user gesture.
   if (ctx.state === "suspended") void ctx.resume();
 
+  // A sound is never worth a crash. WebKit can report a non-finite
+  // currentTime (an interrupted or not-yet-running context), and the
+  // setValueAtTime that followed threw out of the result screen's effect
+  // and blanked the page.
   const t = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  const g = ctx.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, t);
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(gain, t + attack);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-  osc.connect(g).connect(ctx.destination);
-  osc.start(t);
-  osc.stop(t + duration + 0.02);
+  if (!Number.isFinite(t)) return;
+  try {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+  } catch (err) {
+    console.warn("[sound] skipped a tone", err);
+  }
 }
 
 /** Short high blip — used during the 3-2-1 countdown. */

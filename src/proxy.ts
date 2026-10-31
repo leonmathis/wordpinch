@@ -55,6 +55,13 @@ const LIMITS: LimitRule[] = [
     windowMs: MINUTE,
   },
   {
+    // F7: the waiting page polls every 1.5 s (40 a minute).
+    scope: "quick",
+    match: (p) => p === "/api/quick",
+    limit: 120,
+    windowMs: MINUTE,
+  },
+  {
     // F6: start once a day, submit a few tries; GETs are cheap.
     scope: "daily",
     match: (p) => p.startsWith("/api/daily"),

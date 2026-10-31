@@ -34,6 +34,7 @@ src/
 │  ├─ api/collection/         the caller's word collection (RLS, own rows)
 │  ├─ collection/page.tsx     "Your words" page (F2)
 │  ├─ daily/page.tsx          daily pinch (F6); api/daily/{,start,submit,card}
+│  ├─ quick/page.tsx          quick match (F7); api/quick (GET/POST/DELETE)
 │  ├─ r/[code]/opengraph-image.tsx  link preview: result or invite card (F5)
 │  ├─ r/[code]/card/route.tsx       the same card 1080×1350 (?download=1 saves)
 │  ├─ globals.css             tokens, phase backgrounds, animations, shell classes
@@ -58,6 +59,7 @@ src/
    ├─ game/rules.ts           F4 blockedLetters (no-repeat) shared by server and UI
    ├─ og/                     F5 share card (next/og): match-card, daily-card, fonts, render
    ├─ daily.ts                F6 puzzle per UTC day, one try, server clock, board, streak
+   ├─ quick.ts                F7 queue, pairing (quick_match_pair), fixed rules
    ├─ game/word-input.ts      locked-first-letter input (race, daily)
    ├─ supabase/identity.ts    server: resolveCallerId (session first, clientId fallback)
    └─ game/
@@ -74,6 +76,7 @@ src/
 - `?reconnect=1` overlays the reconnect banner
 - `/collection` → the player's word collection (F2)
 - `/daily` → the daily pinch (F6)
+- `/quick` → quick match (F7)
 - Dev only, with `?phase=`: `as=host|guest|spectator` seeds a room without network (`lib/game/preview.ts`); `guest=0` empties the guest seat, `stress=1` uses 32-character names and long words, `away=1` drops the opponent, `opp=submitted`, `settling=1`, `result=win|nearmiss|split|splittimeout|nobody|nobodytimeout|forfeit|replay`, `end=win|loss|tie`, `rounds=15`, `collected=3` (match-end banner count), `rx=close|gg|hurry|go-host|go-guest|ooh` (incoming reaction), `typed=4` (opponent's letter count), `norepeat=1` (G E P K used), `peek=1|used`. The code must be 4 valid characters, e.g. `/r/K7QM`.
 
 ## Conventions

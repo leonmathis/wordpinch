@@ -57,6 +57,51 @@ test.describe("landing", () => {
     expectNoErrors(errors);
   });
 
+  test("every mode's label keeps 12px from its shape's outline", async ({ page }) => {
+    await page.goto("/");
+    await settle(page);
+    // Same geometry as the kit check, applied to the real labels (the daily
+    // tile says "one try a day", longer than the artboard's "Q _ _ _ N").
+    const result = await page.evaluate(() => {
+      const STAR = [[180,100],[158.97,119.16],[164.72,147.02],[136.44,150.16],[124.72,176.08],[100,162],[75.28,176.08],[63.56,150.16],[35.28,147.02],[41.03,119.16],[20,100],[41.03,80.84],[35.28,52.98],[63.56,49.84],[75.28,23.92],[100,38],[124.72,23.92],[136.44,49.84],[164.72,52.98],[158.97,80.84]];
+      const FL = [[100,100,62],[166,100,22],[157.2,133,22],[133,157.2,22],[100,166,22],[67,157.2,22],[43,133,22],[34,100,22],[43,67,22],[67,42.8,22],[100,34,22],[133,42.8,22],[157.2,67,22]];
+      const seg = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+        const dx = bx - ax, dy = by - ay;
+        const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+        return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+      };
+      const flowerEdge: number[][] = [];
+      for (const [cx, cy, r] of FL) for (let a = 0; a < 360; a++) {
+        const x = cx + r * Math.cos((a * Math.PI) / 180), y = cy + r * Math.sin((a * Math.PI) / 180);
+        if (!FL.some(([ox, oy, or]) => (ox !== cx || oy !== cy) && Math.hypot(x - ox, y - oy) < or - 0.01)) flowerEdge.push([x, y]);
+      }
+      const clear: Record<string, (x: number, y: number, size: number) => number> = {
+        square: (x, y, size) => { const e = Math.round(size * 0.74); const s = e / (Math.cos(Math.PI / 30) + Math.sin(Math.PI / 30)); return Math.min(s / 2 - Math.abs(x), s / 2 - Math.abs(y)); },
+        circle: (x, y, size) => Math.round(size * 0.81) / 2 - Math.hypot(x, y),
+        star: (x, y, size) => { const k = size / 200, ux = x / k + 100, uy = y / k + 100; let m = Infinity; for (let i = 0; i < STAR.length; i++) { const [a, b] = STAR[i], [c, d] = STAR[(i + 1) % STAR.length]; m = Math.min(m, seg(ux, uy, a, b, c, d)); } return (m + 9) * k; },
+        flower: (x, y, size) => { const k = size / 200, ux = x / k + 100, uy = y / k + 100; let m = Infinity; for (const [bx, by] of flowerEdge) m = Math.min(m, Math.hypot(ux - bx, uy - by)); return m * k; },
+      };
+      const out: Record<string, number> = {};
+      for (const shape of Array.from(document.querySelectorAll<HTMLElement>('[data-landing="modes"] [data-shape]'))) {
+        if (!shape.offsetParent) continue;
+        const kind = shape.dataset.shape!;
+        const s = shape.getBoundingClientRect();
+        const cx = s.left + s.width / 2, cy = s.top + s.height / 2;
+        shape.querySelectorAll("span > span").forEach((sp) => {
+          const rg = document.createRange();
+          rg.selectNodeContents(sp);
+          for (const r of Array.from(rg.getClientRects()))
+            for (const [px, py] of [[r.left, r.top + r.height * 0.12], [r.right, r.top + r.height * 0.12], [r.left, r.bottom - r.height * 0.12], [r.right, r.bottom - r.height * 0.12]])
+              out[kind] = Math.min(out[kind] ?? Infinity, clear[kind](px - cx, py - cy, s.width));
+        });
+      }
+      return out;
+    });
+    console.log(`[landing modes] ${test.info().project.name}: ${Object.entries(result).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(", ")}`);
+    expect(Object.keys(result).length).toBe(1 + Object.values(FEATURES).filter(Boolean).length);
+    for (const [kind, px] of Object.entries(result)) expect(px, kind).toBeGreaterThanOrEqual(12);
+  });
+
   test("join: ambiguous characters explained, Join gated at 4, valid code navigates", async ({ page }) => {
     await page.goto("/");
     await settle(page);

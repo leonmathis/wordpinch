@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase/admin";
-import { getWordlist } from "./words/wordlist";
+import { fairPairs } from "./words/pairs";
 import { validateWord, type Definition } from "./words/validate";
 import { collectWord } from "./collection";
 
@@ -51,16 +51,9 @@ export type Puzzle = { day: string; number: number; start: string; end: string; 
 
 /** The letters for `day`, picked from the date: same day, same pair. */
 async function pickLetters(day: string): Promise<{ start: string; end: string }> {
-  const words = await getWordlist();
-  const counts = new Map<string, number>();
-  for (const w of words) {
-    if (w.length < MIN_LENGTH) continue;
-    const key = `${w[0]}${w[w.length - 1]}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  const fair = [...counts.entries()].filter(([, n]) => n >= MIN_ANSWERS).map(([k]) => k).sort();
+  const fair = await fairPairs(MIN_LENGTH, MIN_ANSWERS);
   const pick = fair[Math.floor(rng(day)() * fair.length)];
-  return { start: pick[0].toUpperCase(), end: pick[1].toUpperCase() };
+  return { start: pick[0], end: pick[1] };
 }
 
 export async function getPuzzle(day = utcDay()): Promise<Puzzle> {

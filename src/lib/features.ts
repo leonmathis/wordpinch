@@ -7,7 +7,7 @@ export const FEATURES = {
   /** F6: same letters for everyone each day, streak, leaderboard. */
   dailyPinch: true,
   /** F7: matchmaking queue with fixed 5 × 30 s rules. */
-  quickMatch: false,
+  quickMatch: true,
   /** F8: local two-player mode on one device. */
   passThePhone: false,
 } as const;
