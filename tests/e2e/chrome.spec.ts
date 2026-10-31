@@ -181,3 +181,9 @@ test("scrolled content passes under an opaque top bar", async ({ page }) => {
   expect(bg).toBe(rootBg);
 });
 
+test("wordmark link is a 44px target", async ({ page }) => {
+  await page.goto("/");
+  const b = (await page.getByRole("link", { name: "wordpinch" }).boundingBox())!;
+  expect(b.height).toBeGreaterThanOrEqual(44);
+});
+

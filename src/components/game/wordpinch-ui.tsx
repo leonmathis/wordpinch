@@ -197,6 +197,19 @@ export function WordpinchUI({
     ? liveState?.pendingResult?.attempts.some((a) => a.by === opponentRole) ??
       false
     : false;
+  const seats = React.useMemo(() => {
+    const submitted = (side: "host" | "guest") =>
+      liveState?.pendingResult?.attempts.some((a) => a.by === side) ?? false;
+    const online = (side: "host" | "guest") =>
+      preview
+        ? !(preview.away && side === "guest")
+        : !presenceReady || presence.some((m) => m.role === side);
+    return {
+      host: { online: online("host"), submitted: submitted("host") },
+      guest: { online: online("guest"), submitted: submitted("guest") },
+    };
+  }, [liveState?.pendingResult, preview, presenceReady, presence]);
+  const watchers = preview ? 3 : presenceReady ? presence.length : null;
   const isSettling =
     submitInFlight || (myAttemptInPending && phase === "race");
   const settlingWord =
@@ -338,6 +351,8 @@ export function WordpinchUI({
       guestPresent,
       opponentOnline,
       opponentSubmitted,
+      seats,
+      watchers,
       used: usedWords,
       roundOutcomes,
       roomCode: roomCode ?? "",
@@ -377,6 +392,8 @@ export function WordpinchUI({
       guestPresent,
       opponentOnline,
       opponentSubmitted,
+      seats,
+      watchers,
       canReferee,
       usedWords,
       roundOutcomes,
@@ -424,9 +441,14 @@ export function WordpinchUI({
         roomCode={roomCode && phase !== "landing" ? ctx.roomCode : undefined}
         over={phase === "matchend"}
         // Phases already on the redesign carry the score in the top bar;
-        // the rest still show ScoreHud until their round (R8).
+        // result and match end show it in the page.
         score={
-          (phase === "pick" || phase === "reveal" || phase === "race") && role !== "spectator"
+          phase === "pick" ||
+          phase === "reveal" ||
+          phase === "race" ||
+          // Spectators have no score cards outside the result, but the
+          // bar carries it there too (host first, as everywhere for them).
+          (phase === "result" && role === "spectator")
             ? { you: ctx.you, them: ctx.them }
             : undefined
         }

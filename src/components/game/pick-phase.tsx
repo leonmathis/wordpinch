@@ -244,7 +244,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
 
   return (
     <div className="wp-body">
-      <div className="wp-frame scene lg:max-w-[1040px]">
+      <div className="wp-frame lg:max-w-[1040px]">
         {/* Pick had no disconnect handling at all: no timer runs here, so
          *  an opponent who left stranded the other player indefinitely. */}
         {!ctx.opponentOnline ? (

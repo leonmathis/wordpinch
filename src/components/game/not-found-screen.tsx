@@ -16,7 +16,7 @@ export function NotFoundScreen({ title, body }: Props) {
     <div className="wp-root" data-phase="landing">
       <TopChrome total={0} muted={muted} onToggleMute={() => setMuted(!muted)} />
       <div className="wp-body">
-        <div className="wp-frame scene flex flex-col items-center text-center">
+        <div className="wp-frame flex flex-col items-center text-center">
           <Shape kind="star" size={180} fill="var(--shape-pink)">
             <span className="font-hand text-[42px] leading-none">404</span>
           </Shape>

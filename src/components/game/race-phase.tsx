@@ -315,7 +315,7 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
        *  keyboard takes the bottom ~290px, and everything here must sit
        *  above it. */}
       <div
-        className="wp-frame scene mt-0 mb-auto gap-3.5 lg:my-auto lg:max-w-[720px] lg:gap-7"
+        className="wp-frame mt-0 mb-auto gap-3.5 lg:my-auto lg:max-w-[720px] lg:gap-7"
         role="presentation"
         onClick={focusInput}
       >

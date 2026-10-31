@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Gochi_Hand, Urbanist } from "next/font/google";
+import { Gochi_Hand, Urbanist } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/next";
@@ -15,13 +15,6 @@ const urbanist = Urbanist({
 const gochiHand = Gochi_Hand({
   variable: "--font-gochi-hand",
   weight: "400",
-  subsets: ["latin"],
-});
-
-// Still used by `font-mono` labels and the room code until those screens
-// move to the redesign (R10 removes it).
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -50,7 +43,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${urbanist.variable} ${gochiHand.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${urbanist.variable} ${gochiHand.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       {/* `h-full overflow-hidden` (instead of `min-h-full`) is what

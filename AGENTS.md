@@ -15,10 +15,10 @@ Static design implementation — phase 2 of 10. All 8 game phases are built as R
 ## Stack
 
 - Next.js 16.2 (Turbopack, App Router), React 19.2
-- Tailwind CSS 4 + shadcn (base-nova preset, neutral palette)
-- shadcn primitives from `@base-ui/react`: Button, Input, Switch, Dialog, ToggleGroup, Label, Separator
+- Tailwind CSS 4 + shadcn (base-nova preset), restyled to the Pastel Pop redesign (`docs/redesign/`)
+- shadcn primitives from `@base-ui/react`: Button (`pill`, `pill-soft`, `circle`), Input (`pill`), Switch, Dialog (`sheet`), ToggleGroup (`segment`), Popover, Label
 - `next-themes` for system-aware dark mode
-- Geist Sans + Geist Mono via `next/font/google`
+- Urbanist (UI) + Gochi Hand (handwritten lines and game letters) via `next/font/google`
 - `lucide-react` icons
 
 ## File map
@@ -26,24 +26,29 @@ Static design implementation — phase 2 of 10. All 8 game phases are built as R
 ```
 src/
 ├─ app/
-│  ├─ layout.tsx              Geist fonts, ThemeProvider, metadata
+│  ├─ layout.tsx              Urbanist + Gochi Hand, ThemeProvider, metadata
+│  ├─ not-found.tsx           Pastel Pop 404 (shared with r/[code]/not-found.tsx)
+│  ├─ dev/kit/                dev-only kit showcase (404 in production)
 │  ├─ page.tsx                renders Landing via WordpinchUI
-│  ├─ globals.css             tokens, animations, component classes
+│  ├─ globals.css             tokens, phase backgrounds, animations, shell classes
 │  └─ r/[code]/page.tsx       Promise.all on params/searchParams → WordpinchUI
 ├─ components/
 │  ├─ theme-provider.tsx      thin wrapper around next-themes
 │  ├─ ui/                     shadcn primitives
 │  └─ game/                   phase components
 │     ├─ wordpinch-ui.tsx     phase switcher; ShareDialog is next/dynamic
-│     ├─ top-chrome.tsx       progress bar, brand, theme/mute/share buttons
-│     ├─ score-hud.tsx        score row + expandable used-words list
-│     ├─ letters-display.tsx  the `T _ _ _ H` display, shared
-│     └─ (8 phase files + share-dialog, qr, reconnect-banner)
+│     ├─ top-chrome.tsx       round label + pills (inline score), settings gear
+│     ├─ settings-menu.tsx    room/share, sound, theme, how to play, leave
+│     ├─ kit/                 Shape, ShapeGlyph (+ measured glyph offsets),
+│     │                       LetterSlots, AnchoredWord, StatusPill, ModeGrid
+│     └─ (8 phase files + share-dialog, qr, banners, words-played, rounds-table)
 └─ lib/
    ├─ utils.ts                cn() — clsx + tailwind-merge
    ├─ hooks.ts                useStoredBool (useSyncExternalStore)
+   ├─ features.ts             flags for daily / quick match / pass the phone
    └─ game/
-      ├─ mock.ts              deepFrozen MOCK
+      ├─ preview.ts           dev preview state (see Routes)
+      ├─ awards.ts            match-end fastest / longest
       └─ types.ts             GameCtx, GamePhase
 ```
 
@@ -53,14 +58,13 @@ src/
 - `/r/[code]` → renders `WordpinchUI` with the room code uppercased
 - `/r/[code]?phase=lobby|pick|reveal|race|result|matchend|spectator` → that phase (defaults to `lobby`)
 - `?reconnect=1` overlays the reconnect banner
-
-A dev-only phase strip at the bottom of `/r/[code]` is gated by `process.env.NODE_ENV === "development"` and tree-shaken from production.
+- Dev only, with `?phase=`: `as=host|guest|spectator` seeds a room without network (`lib/game/preview.ts`); `guest=0` empties the guest seat, `stress=1` uses 32-character names and long words, `away=1` drops the opponent, `opp=submitted`, `settling=1`, `result=win|nearmiss|split|splittimeout|nobody|nobodytimeout|forfeit|replay`, `end=win|loss|tie`, `rounds=15`. The code must be 4 valid characters, e.g. `/r/K7QM`.
 
 ## Conventions
 
-- **shadcn first.** Don't write plain `<button>` or `<input>` when a shadcn primitive fits. The two giant typographic inputs (`pick-input`, `race-input`) wrap shadcn `Input` with className overrides — see `PICK_INPUT_OVERRIDES` / `RACE_INPUT_OVERRIDES` in their phase files.
+- **shadcn first.** Don't write plain `<button>` or `<input>` when a shadcn primitive fits; use the Pastel Pop variants.
+- **Text inside shapes** keeps ≥12px from the real outline and glyphs are optically centred; both are measured in `tests/e2e` (kit, landing, race, matchend).
 - **Tailwind for one-offs**, `@layer components` in `globals.css` for repeated patterns or anything needing `::before` / nth-child / pseudo selectors.
-- **Subgrid** for cross-row column alignment (see `.used-list` + `.used-row` in `globals.css`).
 - **Phase reset** via `key={sceneKey}` remount — never `setState` in a `useEffect` body (React 19 will lint it).
 - **Persisted state** via `useStoredBool` (`useSyncExternalStore` + cross-tab `storage` events). Keys are namespaced `wordpinch:v1:…`.
 - **`prefers-reduced-motion`** is honored on all entrance/scene animations.
@@ -75,7 +79,7 @@ A dev-only phase strip at the bottom of `/r/[code]` is gated by `process.env.NOD
 | Add a shadcn component | `npx shadcn@latest add <name>` — drops into `src/components/ui/` |
 | Change a design token | `globals.css` `:root` / `.dark` blocks (oklch values) |
 | Add a new game phase | New component in `src/components/game/`, add to `GamePhase` in `types.ts`, add to the phase switch in `wordpinch-ui.tsx` and the validator in `r/[code]/page.tsx` |
-| Adjust mock data | `src/lib/game/mock.ts` — re-`deepFreeze`d on edit |
+| Adjust preview data | `src/lib/game/preview.ts` |
 
 ## Verify before committing
 
@@ -83,9 +87,10 @@ A dev-only phase strip at the bottom of `/r/[code]` is gated by `process.env.NOD
 npx tsc --noEmit   # typecheck
 npm run lint       # eslint
 npm run build      # production build (typechecks too)
+npm run test:e2e   # Playwright on 6 device profiles (dev server)
 ```
 
-Visual: open the dev server and click through the phase strip at the bottom of `/r/slate-9f`. CSS Grid `max-content` is per-grid-container, so any change to `.used-row` needs verification across multiple rows.
+Screenshots land in `test-results/screens/` (scrolled `.wp-body` segments as `-2`, `-3`…). The per-PR checklist is in `docs/redesign/03-code-mapping.md` §7. If a CSS change doesn't show, check the computed style: the dev server once served a stale `globals.css` until restarted.
 
 ## What's coming next (phase 3+)
 

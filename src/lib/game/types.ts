@@ -124,6 +124,14 @@ export type GameCtx = {
    * same player had left.
    */
   opponentSubmitted: boolean;
+  /**
+   * Per-seat status by role, for views that show both players at once (the
+   * spectator race): online from presence (assumed until the first sync),
+   * submitted from `pendingResult`.
+   */
+  seats: Record<"host" | "guest", { online: boolean; submitted: boolean }>;
+  /** Everyone subscribed to the room, players included; null before sync. */
+  watchers: number | null;
   used: UsedWord[];
   /**
    * How each finished round ended. Lets the match-end summary label rounds

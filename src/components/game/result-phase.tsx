@@ -332,7 +332,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   return (
     <div className="wp-body">
       <div
-        className="wp-frame scene lg:max-w-[1040px]"
+        className="wp-frame lg:max-w-[1040px]"
         onPointerEnter={canHold ? hold : undefined}
         onPointerLeave={canHold ? release : undefined}
         onFocusCapture={canHold ? hold : undefined}

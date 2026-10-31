@@ -1,47 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { Check, Eye } from "lucide-react";
 import type { GameCtx } from "@/lib/game/types";
-import { ScoreHud } from "./score-hud";
-import { Input } from "@/components/ui/input";
-import { LettersDisplay } from "./letters-display";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Avatar } from "./avatar";
+import { AnchoredWord } from "./kit/anchored-word";
+import { LetterSlots } from "./kit/letter-slots";
+import { ShapeGlyph } from "./kit/shape";
+import { StatusPill } from "./kit/status-pill";
 import { RoundsTable } from "./rounds-table";
-
-const RACE_INPUT_OVERRIDES =
-  "race-input rounded-[var(--radius)] h-[96px] max-[500px]:h-[80px] w-full px-4 py-0 text-[48px] max-[500px]:text-[36px] md:text-[48px] bg-transparent dark:bg-transparent focus-visible:ring-0";
-
-function Banner({ ctx }: { ctx: GameCtx }) {
-  // On narrow screens the theme / sound / share icons in `TopChrome` sit
-  // in the same row as `top: 12`, so the banner used to slide *under*
-  // them visually (banner has lower z-index). The `sm` breakpoint
-  // (640 px) flips us back into the desktop-centered position where
-  // there's room either side of the icons.
-  //
-  // Suppressed while the reconnect banner is up: both are absolutely
-  // positioned at the same coordinates, and this one (later in the DOM)
-  // painted straight over the reconnect notice *and* its Refresh button.
-  if (ctx.reconnectOpen) return null;
-  const playerCount = ctx.guestPresent ? 2 : 1;
-  return (
-    <div
-      className="absolute left-0 right-0 z-[3] flex justify-center px-4 pointer-events-none top-[60px] sm:top-3"
-    >
-      <Alert className="max-w-sm backdrop-blur-sm bg-background/85 shadow-sm">
-        <Eye />
-        <AlertDescription>
-          {/* The count used to be hard-coded to "2 players", and nothing
-           *  explained why this viewer can't play. */}
-          Watching — both seats are taken ({playerCount}{" "}
-          {playerCount === 1 ? "player" : "players"} in this room)
-        </AlertDescription>
-      </Alert>
-    </div>
-  );
-}
 
 /**
  * Drives a once-per-second countdown clamped to [0, total]. Initial value
@@ -69,240 +37,205 @@ function useRaceClock(total: number, raceStartedAt: number | undefined) {
   return left;
 }
 
+const HEAD = "m-0 text-[34px] leading-none font-extrabold tracking-[-1px]";
+const HAND = "font-hand text-[40px] font-normal tracking-normal";
+const SIDES = ["host", "guest"] as const;
+
+function nameOf(ctx: GameCtx, side: "host" | "guest") {
+  return side === "host" ? ctx.hostName : ctx.guestName;
+}
+
 function SpectatorLobby({ ctx }: { ctx: GameCtx }) {
   return (
-    <div className="wp-frame scene">
-      <div className="room-code" style={{ textAlign: "center", marginBottom: 24 }}>
-        {ctx.roomCode}
+    <>
+      <div>
+        <div className="text-[56px] leading-none font-extrabold tracking-[3px]">{ctx.roomCode}</div>
+        <div className="font-hand text-[30px] leading-[1.1]">the match hasn&rsquo;t started yet</div>
       </div>
-      <div className="t-label-up" style={{ marginBottom: 8 }}>
-        Players
-      </div>
-      <Separator />
-      <div className="players-row">
-        <div className="flex items-center gap-3">
-          <Avatar name={ctx.hostName} side="host" />
-          <span>
-            {ctx.hostName} <span className="t-label">(host)</span>
-          </span>
-        </div>
-      </div>
-      <Separator />
-      <div className="players-row">
-        <div className="flex items-center gap-3">
-          {ctx.guestPresent ? (
-            <Avatar name={ctx.guestName} side="guest" />
+      <section aria-label="Players" className="flex flex-col gap-2.5 rounded-[28px] bg-card p-3.5">
+        {SIDES.map((side) =>
+          side === "guest" && !ctx.guestPresent ? (
+            <div key={side} className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground font-hand text-[22px] text-muted-foreground"
+              >
+                ?
+              </span>
+              <span className="font-hand text-2xl text-muted-foreground">waiting for a player…</span>
+            </div>
           ) : (
-            <Avatar
-              name="?"
-              dim
-              className="!bg-transparent border border-dashed border-border !text-muted-foreground"
-            />
-          )}
-          <span className={ctx.guestPresent ? undefined : "text-muted-foreground italic"}>
-            {ctx.guestPresent ? ctx.guestName : "Waiting for player…"}
-          </span>
-        </div>
-      </div>
-      <Separator />
-      <div
-        className="t-label text-center"
-        style={{ marginTop: 24 }}
-      >
-        Match hasn&apos;t started yet
-      </div>
-    </div>
+            <div key={side} className="flex min-w-0 items-center gap-3">
+              <Avatar name={nameOf(ctx, side)} side={side} size={44} />
+              <span className="min-w-0 flex-1 truncate text-base font-bold">{nameOf(ctx, side)}</span>
+              <span className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-[13px] font-extrabold text-primary-foreground">
+                Ready
+              </span>
+            </div>
+          )
+        )}
+      </section>
+    </>
   );
 }
 
 function SpectatorPick({ ctx }: { ctx: GameCtx }) {
+  // Both letters stay server-private until both are locked, so a
+  // spectator sees two "?" and who picks which end. Lock status is not in
+  // the client state at all (lib/game/sanitize.ts).
   return (
-    <div className="wp-frame scene" style={{ alignItems: "center" }}>
-      <div
-        className="t-label-up"
-        style={{ marginBottom: 32 }}
-      >
-        Round {ctx.round} of {ctx.total}
+    <>
+      <h1 className={HEAD}>
+        Both are
+        <br />
+        <span className={HAND}>picking letters…</span>
+      </h1>
+      <div className="flex items-start justify-center gap-[18px] py-2">
+        {(ctx.firstPicker === "host" ? SIDES : ([...SIDES].reverse() as ("host" | "guest")[])).map((side, i) => (
+          <React.Fragment key={side}>
+            {i === 1 ? (
+              <span aria-hidden className="mt-6 font-hand text-[30px] tracking-[3px] text-muted-foreground">
+                _ _ _
+              </span>
+            ) : null}
+            <div className="flex min-w-0 flex-col items-center gap-2">
+              <ShapeGlyph kind="ring" size={84} glyph="?" fill="var(--muted-foreground)" color="var(--muted-foreground)" />
+              <span className="max-w-[120px] truncate text-sm font-bold">{`${nameOf(ctx, side)} · ${i === 0 ? "first" : "last"}`}</span>
+            </div>
+          </React.Fragment>
+        ))}
       </div>
-      <div
-        style={{
-          fontSize: 20,
-          fontWeight: 500,
-          textAlign: "center",
-          lineHeight: 1.4,
-        }}
-      >
-        Players are picking their letters…
-      </div>
-      <ScoreHud
-        you={ctx.you}
-        them={ctx.them}
-        used={ctx.used.filter((u) => u.round < ctx.round)}
-      />
-    </div>
+    </>
   );
 }
 
-function SpectatorReveal({ ctx }: { ctx: GameCtx }) {
-  // A spectator joining mid-reveal won't see the full 3-2-1-GO sync because
-  // the countdown runs on its own client clock; just show the letters once
-  // they're available in state.
-  const A = ctx.letterStart;
-  const B = ctx.letterEnd;
-  const gaps = Math.max(0, ctx.minWordLength - 2);
-  return (
-    <div className="wp-frame scene" style={{ alignItems: "center" }}>
-      <div
-        className="t-label-up"
-        style={{ marginBottom: 24 }}
-      >
-        Round {ctx.round} of {ctx.total}
-      </div>
-      {A && B ? (
-        <LettersDisplay start={A} end={B} variant="template" animated gaps={gaps} />
-      ) : (
-        <div className="countdown">3 · 2 · 1</div>
-      )}
-    </div>
-  );
-}
-
-function SpectatorRace({ ctx }: { ctx: GameCtx }) {
-  const A = ctx.letterStart;
-  const B = ctx.letterEnd;
-  const gaps = Math.max(0, ctx.minWordLength - 2);
+function SpectatorRace({ ctx, timer }: { ctx: GameCtx; timer: boolean }) {
   const total = ctx.roundTimerSec || 60;
   const left = useRaceClock(total, ctx.raceStartedAt);
-  const pct = total > 0 ? (left / total) * 100 : 0;
-
   return (
-    <div className="wp-frame scene">
-      <div
-        className="flex items-center justify-between"
-        style={{ marginBottom: 22 }}
-      >
-        <LettersDisplay start={A} end={B} gaps={gaps} />
-        <div
-          className="font-mono tabular-nums"
-          style={{
-            fontSize: 24,
-            color: left <= 5 ? "var(--destructive)" : "var(--foreground)",
-          }}
-        >
-          {String(left).padStart(2, "0")}s
-        </div>
-      </div>
-
-      <div className="race-input-wrap">
-        <Input
-          className={`${RACE_INPUT_OVERRIDES} opacity-50`}
-          disabled
-          value=""
-          placeholder={`${A}${"_".repeat(gaps)}${B}`}
-          readOnly
-          aria-label="Spectator view"
+    <>
+      <div className="flex items-center justify-between gap-2.5">
+        <LetterSlots
+          first={ctx.letterStart || null}
+          last={ctx.letterEnd || null}
+          size={84}
+          firstFill={timer ? "var(--shape-blue)" : "var(--shape-yellow)"}
+          className="justify-start gap-2"
         />
-        <div className="race-progress" style={{ width: `${pct}%` }} />
+        {timer ? (
+          <div
+            role="timer"
+            aria-label={`${left} seconds left`}
+            className={cn(
+              "flex size-16 shrink-0 items-center justify-center rounded-full text-2xl font-extrabold tabular-nums",
+              left <= 5 ? "bg-shape-magenta text-white" : "bg-shape-yellow text-[#141414]"
+            )}
+          >
+            {left}
+          </div>
+        ) : null}
       </div>
+      {timer ? (
+        <>
+          {/* Each player's real state, from presence and pendingResult; it
+           *  used to say "typing" for both, always. */}
+          <div className="flex flex-col gap-2.5">
+            {SIDES.map((side) => {
+              const seat = ctx.seats[side];
+              const name = nameOf(ctx, side);
+              return (
+                <div key={side} className="flex min-w-0 items-center gap-3 rounded-full bg-card py-1.5 pr-4 pl-1.5">
+                  <Avatar name={name} side={side} size={36} dim={!seat.online} />
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">
+                    {!seat.online ? `${name} is offline` : seat.submitted ? `${name} submitted a word` : `${name} is in the round`}
+                  </span>
+                  {seat.online && seat.submitted ? <Check aria-hidden className="size-[18px] shrink-0" strokeWidth={2.8} /> : null}
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-center font-hand text-2xl text-muted-foreground">words stay secret until the round ends</div>
+        </>
+      ) : null}
+    </>
+  );
+}
 
-      <div
-        className="flex items-center justify-between"
-        style={{ marginTop: 14 }}
-      >
-        <div className="t-label flex items-center" style={{ gap: 8 }}>
-          <Avatar name={ctx.hostName} size={18} side="host" />
-          <span>{ctx.hostName} typing</span>
-          <span
-            className="wp-dot pulse-soft"
-            style={{ background: "var(--muted-foreground)" }}
-          />
+function ScoreCards({ ctx }: { ctx: GameCtx }) {
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      {SIDES.map((side, i) => (
+        <div key={side} className={cn("min-w-0 rounded-[26px] px-4 py-3.5 text-[#141414]", i === 0 ? "bg-shape-yellow" : "bg-shape-pink")}>
+          <div className="truncate text-sm font-bold">{nameOf(ctx, side)}</div>
+          <div className="text-[40px] leading-none font-extrabold tabular-nums">{side === "host" ? ctx.you.score : ctx.them.score}</div>
         </div>
-        <div className="t-label flex items-center" style={{ gap: 8 }}>
-          <span
-            className="wp-dot pulse-soft"
-            style={{ background: "var(--muted-foreground)" }}
-          />
-          <span>{ctx.guestName} typing</span>
-          <Avatar name={ctx.guestName} size={18} side="guest" />
-        </div>
-      </div>
-
-      <ScoreHud
-        you={ctx.you}
-        them={ctx.them}
-        used={ctx.used.filter((u) => u.round < ctx.round)}
-      />
+      ))}
     </div>
   );
 }
 
 function SpectatorResult({ ctx }: { ctx: GameCtx }) {
-  const isTimeout = ctx.winner === "none";
+  const single = ctx.winner === "host" || ctx.winner === "guest";
+  const title = single
+    ? ctx.resultReason === "forfeit"
+      ? `${nameOf(ctx, ctx.winner as "host" | "guest")} wins round ${ctx.round} by forfeit`
+      : `${nameOf(ctx, ctx.winner as "host" | "guest")} won round ${ctx.round}`
+    : ctx.winner === "split"
+      ? `Tied round ${ctx.round}: both score`
+      : `Round ${ctx.round}: nobody scored`;
+  const first = ctx.resultAttempts?.[0];
+  const time = first && ctx.raceStartedAt ? `${((first.submittedAt - ctx.raceStartedAt) / 1000).toFixed(1)} s` : null;
   return (
-    <div className="wp-frame scene" style={{ alignItems: "center" }}>
-      <div
-        className="t-label-up"
-        style={{ marginBottom: 12 }}
-      >
-        Round {ctx.round} of {ctx.total}
-      </div>
-      {isTimeout ? (
-        <div style={{ fontSize: 28, fontWeight: 500 }}>No winner this round</div>
-      ) : (
-        <>
-          <div style={{ fontSize: 56, fontWeight: 500, letterSpacing: "-0.02em" }}>
-            {ctx.word}
-          </div>
-          {ctx.ipa ? (
-            <div
-              className="font-mono italic text-muted-foreground"
-              style={{ fontSize: 18, marginTop: 6 }}
-            >
-              {ctx.ipa}
-            </div>
+    <>
+      <div className="self-start rounded-full bg-card px-3.5 py-2 text-sm font-bold [overflow-wrap:anywhere]">{title}</div>
+      {ctx.word ? (
+        <div className="flex flex-col gap-2">
+          <h1 className="m-0" aria-label={ctx.word}>
+            <AnchoredWord word={ctx.word.toLowerCase()} />
+          </h1>
+          {ctx.ipa || time ? (
+            <div className="text-base font-semibold text-muted-foreground">{[ctx.ipa, time].filter(Boolean).join(" · ")}</div>
           ) : null}
-        </>
-      )}
-      <ScoreHud
-        you={ctx.you}
-        them={ctx.them}
-        used={ctx.used.filter((u) => u.round <= ctx.round)}
-      />
-    </div>
+        </div>
+      ) : null}
+      <ScoreCards ctx={ctx} />
+    </>
   );
 }
 
 function SpectatorMatchEnd({ ctx }: { ctx: GameCtx }) {
-  const hostWon = ctx.you.score > ctx.them.score;
-  const tie = ctx.you.score === ctx.them.score;
+  const host = ctx.you.score;
+  const guest = ctx.them.score;
+  const tie = host === guest;
+  // Winner first, in the headline and the score pills; it used to print
+  // the host first whoever won.
+  const order: ("host" | "guest")[] = guest > host ? ["guest", "host"] : ["host", "guest"];
+  const scoreOf = (side: "host" | "guest") => (side === "host" ? host : guest);
   return (
-    <div className="wp-frame scene" style={{ alignItems: "center" }}>
-      <div className="t-label-up" style={{ marginBottom: 12 }}>
-        Match
+    <>
+      <h1 className="m-0 text-[44px] leading-[0.98] font-extrabold tracking-[-1.5px] [overflow-wrap:anywhere]">
+        {tie ? "Dead heat!" : nameOf(ctx, order[0])}
+        <br />
+        <span className="font-hand text-[50px] font-normal tracking-normal">{tie ? "nobody blinks" : "pinched it!"}</span>
+      </h1>
+      <div className="flex flex-wrap items-center gap-3">
+        {order.map((side, i) => (
+          <span
+            key={side}
+            className={cn(
+              "max-w-full truncate rounded-full px-[18px] py-2 text-[28px] font-extrabold",
+              i === 0 || tie ? "bg-shape-yellow text-[#141414]" : "bg-card"
+            )}
+          >
+            {`${nameOf(ctx, side)} ${scoreOf(side)}`}
+          </span>
+        ))}
       </div>
-      <div style={{ fontSize: 32, fontWeight: 500 }}>
-        {tie
-          ? "Tied match"
-          : hostWon
-          ? `${ctx.hostName} wins`
-          : `${ctx.guestName} wins`}
-      </div>
-      <div
-        className="font-mono"
-        style={{ fontSize: 18, marginTop: 8, color: "var(--muted-foreground)" }}
-      >
-        {ctx.you.score} · {ctx.them.score}
-      </div>
-
+      <div className="font-hand text-2xl text-muted-foreground">waiting to see if they go again…</div>
       {/* Spectators used to get the headline and nothing else — no way to
        *  see what was actually played. Same summary the players get. */}
-      <section className="w-full" style={{ marginTop: 28 }}>
-        <div className="t-label-up" style={{ marginBottom: 8 }}>
-          Rounds
-        </div>
-        <RoundsTable ctx={ctx} />
-      </section>
-    </div>
+      <RoundsTable ctx={ctx} />
+    </>
   );
 }
 
@@ -310,24 +243,27 @@ function SpectatorMatchEnd({ ctx }: { ctx: GameCtx }) {
  * Read-only view rendered for any client whose role resolves to 'spectator'.
  * The inner content switches on the active game phase so a spectator who
  * joins mid-match sees what's actually happening rather than a generic
- * "watching..." placeholder.
+ * "watching..." placeholder. The banner sits in normal flow, so nothing
+ * needs padding to clear it.
  */
 export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
   return (
-    <>
-      <Banner ctx={ctx} />
-      {/* `pt-[120px]` on narrow viewports clears the banner that's been
-       *  pushed to `top: 60` to avoid overlapping the chrome icons; the
-       *  `sm:pt-[76px]` falls back to the desktop value where the banner
-       *  sits in the icons row. */}
-      <div className="wp-body pt-[120px] sm:pt-[76px]">
+    <div className="wp-body">
+      <div className="wp-frame gap-[18px] lg:max-w-[720px]">
+        <StatusPill
+          role="status"
+          icon={<Eye />}
+          action={ctx.watchers !== null ? <span className="pr-2 text-[13px] font-bold text-muted-foreground">{`${ctx.watchers} here`}</span> : undefined}
+        >
+          You&rsquo;re watching. Both seats are taken.
+        </StatusPill>
         {ctx.phase === "lobby" ? <SpectatorLobby ctx={ctx} /> : null}
         {ctx.phase === "pick" ? <SpectatorPick ctx={ctx} /> : null}
-        {ctx.phase === "reveal" ? <SpectatorReveal ctx={ctx} /> : null}
-        {ctx.phase === "race" ? <SpectatorRace ctx={ctx} /> : null}
+        {ctx.phase === "reveal" ? <SpectatorRace ctx={ctx} timer={false} /> : null}
+        {ctx.phase === "race" ? <SpectatorRace ctx={ctx} timer /> : null}
         {ctx.phase === "result" ? <SpectatorResult ctx={ctx} /> : null}
         {ctx.phase === "matchend" ? <SpectatorMatchEnd ctx={ctx} /> : null}
       </div>
-    </>
+    </div>
   );
 }

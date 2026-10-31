@@ -9,7 +9,7 @@ import type { GamePhase } from "./types";
  */
 export type PreviewOpts = {
   phase: GamePhase;
-  as: "host" | "guest";
+  as: "host" | "guest" | "spectator";
   /** Whether the guest seat is taken. */
   guest: boolean;
   stress: boolean;
@@ -149,12 +149,12 @@ export function parsePreview(
     rounds?: string;
   }
 ): PreviewOpts | null {
-  if (sp.as !== "host" && sp.as !== "guest") return null;
+  if (sp.as !== "host" && sp.as !== "guest" && sp.as !== "spectator") return null;
   return {
     phase,
     as: sp.as,
-    // A guest viewer implies a taken guest seat.
-    guest: sp.as === "guest" || sp.guest !== "0",
+    // A guest or spectator viewer implies a taken guest seat.
+    guest: sp.as !== "host" || sp.guest !== "0",
     stress: sp.stress === "1",
     away: sp.away === "1",
     oppSubmitted: sp.opp === "submitted",
@@ -193,7 +193,9 @@ export function previewState(opts: PreviewOpts): PersistedGameState {
                 pendingResult: {
                   attempts: [
                     {
-                      by: opts.settling ? opts.as : opts.as === "host" ? ("guest" as const) : ("host" as const),
+                      // Settling: your own word. Otherwise the other seat's
+                      // (for a spectator, the guest's).
+                      by: opts.settling && opts.as !== "spectator" ? opts.as : opts.as === "host" || opts.as === "spectator" ? ("guest" as const) : ("host" as const),
                       word: opts.stress ? "thoroughbreedsmith" : "tooth",
                       submittedAt: 0,
                     },

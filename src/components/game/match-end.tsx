@@ -117,7 +117,7 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
 
   return (
     <div className="wp-body">
-      <div className="wp-frame scene lg:max-w-[1040px]">
+      <div className="wp-frame lg:max-w-[1040px]">
         <div className="grid grid-cols-1 gap-[18px] lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-x-12 lg:[grid-template-areas:'main_table''cta_table']">
           <div className="flex min-w-0 flex-col gap-[18px] lg:[grid-area:main]">
             <h1 className="m-0 text-[44px] leading-[0.98] font-extrabold tracking-[-1.5px] [overflow-wrap:anywhere] lg:text-[56px]">

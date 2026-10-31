@@ -343,7 +343,7 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
 
   return (
     <div className="wp-body">
-      <div className="wp-frame scene lg:max-w-[1040px]">
+      <div className="wp-frame lg:max-w-[1040px]">
         <div className="grid grid-cols-1 gap-[22px] lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-12 lg:[grid-template-areas:'room_rules''cta_rules']">
           <div className="flex min-w-0 flex-col gap-[18px] lg:[grid-area:room]">
             <div>

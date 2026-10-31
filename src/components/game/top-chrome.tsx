@@ -63,7 +63,8 @@ export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, room
         // The wordmark is the conventional "go home" affordance.
         <Link
           href="/"
-          className="rounded-sm text-xl font-extrabold tracking-[-0.01em] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          // 44px tall like every other target; the text stays where it was.
+          className="-my-2 flex min-h-11 items-center rounded-sm text-xl font-extrabold tracking-[-0.01em] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           wordpinch
         </Link>
