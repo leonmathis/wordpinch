@@ -39,23 +39,32 @@ function DialogOverlay({
   )
 }
 
+const DIALOG_POPUP_VARIANTS = {
+  default:
+    "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+  // Pastel Pop share sheet: a bottom sheet on phones, a centred 440px
+  // dialog from 640px up.
+  sheet:
+    "fixed inset-x-0 bottom-0 z-50 grid w-full gap-4 rounded-t-[32px] bg-popover px-6 pt-4 pb-8 text-sm text-popover-foreground shadow-[0_-10px_40px_rgb(0_0_0/0.15)] duration-200 outline-none data-open:animate-in data-open:slide-in-from-bottom data-closed:animate-out data-closed:slide-out-to-bottom motion-reduce:data-open:animate-none motion-reduce:data-closed:animate-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-[440px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[32px] sm:pb-6 sm:data-open:slide-in-from-bottom-0 sm:data-open:fade-in-0 sm:data-open:zoom-in-95",
+} as const
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  variant = "default",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  variant?: keyof typeof DIALOG_POPUP_VARIANTS
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={variant === "sheet" ? "bg-black/30" : undefined} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
-        className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
-        )}
+        data-variant={variant}
+        className={cn(DIALOG_POPUP_VARIANTS[variant], className)}
         {...props}
       >
         {children}
@@ -63,11 +72,19 @@ function DialogContent({
           <DialogPrimitive.Close
             data-slot="dialog-close"
             render={
-              <Button
-                variant="ghost"
-                className="absolute top-2 right-2"
-                size="icon-sm"
-              />
+              variant === "sheet" ? (
+                <Button
+                  variant="circle"
+                  className="absolute top-5 right-5 bg-row"
+                  size="circle"
+                />
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="absolute top-2 right-2"
+                  size="icon-sm"
+                />
+              )
             }
           >
             <XIcon

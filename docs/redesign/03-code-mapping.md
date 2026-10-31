@@ -69,7 +69,7 @@ All live in `src/components/game/kit/` unless noted. They're shadcn-first: primi
 | `ui/button.tsx` variants | add `variant: pill` (ink), `pill-soft` (white/surface), `circle` (44px icon); sizes `pill-lg` (56px), `pill-md` (44px). Keep the existing variants for anything not yet migrated | 44px minimum touch target |
 | `ui/input.tsx` variant | `pill` (52–60px, surface background, 2px magenta ring when `aria-invalid`) | race input font steps (24 → 19px past 13 letters) via a prop |
 | `ui/switch.tsx` | restyle to 48×28, ink track on, knob light | none |
-| `ui/toggle-group.tsx` | segmented pill (tie behaviour, theme, collection filter) | none |
+| `ui/toggle-group.tsx` | segmented pill (tie behaviour, theme, collection filter) | segments are 44px tall, not the canvas's 38px (touch-target rule); `variant="segment"` defaults to a 4px gap |
 | `ui/dialog.tsx` | add `variant: sheet`: bottom sheet below 640px, centred 440px dialog above | none |
 | `Shape` (`square`, `star`, `flower`, `circle`) | inline SVG / div shapes with a fill prop | optical sizing (square 74%, circle 81% of the box); `safeInset` per shape (square 13%, circle 15%, star 30%, flower 22%) |
 | `ShapeGlyph` | Gochi Hand letter inside a `Shape` | per-glyph offset table: T, H, N `padding-top: .16em`; "?" `translate(.02em,.13em)`; correct when ≥5% off. Measure all 26 once with the `measureText` script from 02 |
@@ -164,6 +164,7 @@ R5–R9 only depend on R2 and touch separate files, so they can run in parallel.
 ## 7. Checklist for every PR
 
 - [ ] `npx tsc --noEmit`, `npm run lint`, `npm run build` pass (AGENTS.md).
+- [ ] `npm run test:e2e` passes on all six Playwright profiles: iPhone, iPhone dark, Android, iPad, desktop, desktop dark (`playwright.config.ts`). The suite covers console errors and horizontal overflow on every screen, and kit geometry (glyph centring, label clearance, touch targets, contrast, sheet placement). Screenshots land in `test-results/screens/`.
 - [ ] Screenshots at 390 and 1280px, light and dark, compared against the canvas artboard and the baseline.
 - [ ] **Overflow check:** run the overflow script from step 2 (`scratchpad/render`, to be moved into `scripts/` with R2) on the changed screens with the stress data (32-char names, 19-letter word, 3.5, 300s).
 - [ ] **Shapes:** text inside shapes ≥12px from the real outline (shape clearance script); glyphs use `ShapeGlyph`.

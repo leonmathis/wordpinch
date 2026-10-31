@@ -4,28 +4,23 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * 6-step hue palette spaced ~60° around the wheel. Lightness and chroma are
- * fixed so every colour reads well over both light and dark backgrounds
- * with white initials on top. Using oklch so the perceptual lightness is
- * uniform (rgb hand-picked palettes drift here).
+ * Pastel Pop shape fills. They stay pastel in both themes and always carry
+ * ink initials, so contrast does not depend on the page background.
  */
 const PALETTE = [
-  "oklch(0.48 0.16 25)", // warm red-orange
-  "oklch(0.5 0.13 80)", // amber
-  "oklch(0.47 0.12 150)", // green
-  "oklch(0.48 0.12 210)", // teal-blue
-  "oklch(0.48 0.16 280)", // violet
-  "oklch(0.48 0.15 340)", // pink
+  "var(--shape-pink)",
+  "var(--shape-sage)",
+  "var(--shape-blue)",
+  "var(--shape-yellow)",
 ];
 
 /**
  * Fixed palette slots for the two seats. The name hash alone gave both
- * players the same colour whenever their names collided in the 6-slot
- * palette (the out-of-the-box "Host"/"guest" pair did exactly that), which
- * defeats the point of a colour-coded avatar. Seats are far apart on the
- * wheel so they never read as the same person.
+ * players the same colour whenever their names collided in the palette
+ * (the out-of-the-box "Host"/"guest" pair did exactly that), which defeats
+ * the point of a colour-coded avatar.
  */
-const SIDE_SLOT = { host: 1, guest: 3 } as const;
+const SIDE_SLOT = { host: 0, guest: 1 } as const;
 
 /**
  * Stable hash → palette index. djb2-ish; not crypto, just spreads inputs
@@ -69,7 +64,7 @@ export function Avatar({ name, size = 24, className, dim = false, side }: Props)
     <span
       aria-hidden
       className={cn(
-        "inline-flex items-center justify-center rounded-full font-mono font-semibold text-white shrink-0 transition-opacity",
+        "inline-flex items-center justify-center rounded-full font-hand text-[#141414] shrink-0 transition-opacity",
         dim ? "opacity-40" : "opacity-100",
         className
       )}
@@ -77,7 +72,7 @@ export function Avatar({ name, size = 24, className, dim = false, side }: Props)
         background: color,
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.45),
+        fontSize: Math.round(size * 0.6),
         lineHeight: 1,
       }}
     >

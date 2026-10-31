@@ -72,6 +72,8 @@ The numbers refer to [01-inventory.md §5](01-inventory.md).
   In code this becomes one `<ShapeGlyph>` helper with a per-glyph offset table, so the correction isn't scattered across the screens.
 - **Status:** applied to pick, race and reveal/settling (letters T and H plus the "?").
 - **Below the threshold:** O (2%) and the avatar initials J (2.6%) and L (3.3%) need no correction. At avatar size (22px) the offset is about half a pixel.
+- **Implementation (R2, 31.10.):** `ShapeGlyph` applies the **exact** measured offset for every letter A–Z and "?" (`src/components/game/kit/glyph-offsets.ts`), not just the ones over 5%. Playwright measures the result on 6 device profiles: worst ink-centre error 0.14px (Chromium) and 0.17px (WebKit) over 54 glyphs.
+  - **WebKit `measureText` is not reliable for horizontal ink bounds.** A pixel scan shows identical glyph rendering in both engines, but WebKit's `actualBoundingBoxLeft/Right` disagree with its own pixels (L: metrics 1.7% vs pixels 4.2%). Glyph checks therefore scan rendered pixels at 4× size (`tests/e2e/kit.spec.ts`, probe in `tests/e2e/glyph-metrics.probe.ts`).
 - **N and Q (measured 31.10. for the daily pinch):** N sits 8% high, so it gets the same correction as T and H. Q is 2% low, below the threshold, so it gets none. Rule of thumb: correct glyphs that are off by 5% or more. The `<ShapeGlyph>` table holds the measured values per letter, and all 26 get measured once at implementation.
 
 **Text inside shapes (Leon, 31.10.):** text must keep a clean margin from the shape's edge, **at least 12px everywhere, aiming for about 20px**.
