@@ -3,6 +3,7 @@ import { WordpinchUI } from "@/components/game/wordpinch-ui";
 import { getRoomByCode, isValidCode } from "@/lib/rooms";
 import { sanitizeStateForClient } from "@/lib/game/sanitize";
 import type { GamePhase } from "@/lib/game/types";
+import { parsePreview } from "@/lib/game/preview";
 
 const VALID_PHASES = new Set<GamePhase>([
   "landing",
@@ -17,7 +18,7 @@ const VALID_PHASES = new Set<GamePhase>([
 
 type Props = {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ phase?: string; reconnect?: string }>;
+  searchParams: Promise<{ phase?: string; reconnect?: string; as?: string; guest?: string; stress?: string }>;
 };
 
 export default async function RoomPage({ params, searchParams }: Props) {
@@ -39,6 +40,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
         initialPhase={requested}
         roomCode={code}
         showReconnect={sp.reconnect === "1"}
+        preview={parsePreview(requested, sp) ?? undefined}
       />
     );
   }

@@ -149,3 +149,35 @@ test.describe("status banners", () => {
     await context.close();
   });
 });
+
+test("scrolled content passes under an opaque top bar", async ({ page }) => {
+  await page.goto("/r/K7QM?phase=lobby&as=host");
+  await page.evaluate(() => document.fonts.ready);
+  const bar = (await page.locator(".wp-chrome").boundingBox())!;
+  expect(bar.height).toBeLessThanOrEqual(64);
+  const scrolled = await page.evaluate(() => {
+    const body = document.querySelector<HTMLElement>(".wp-body")!;
+    body.scrollTop = 300;
+    return body.scrollTop;
+  });
+  test.skip(scrolled === 0, "lobby fits without scrolling on this viewport");
+  // The bar spans the full width on top of the content; the background
+  // check below is what proves the content is hidden, not just covered.
+  const leaks = await page.evaluate(({ h }) => {
+    // The bar is pointer-events: none so it never eats taps meant for the
+    // page; hit-testing needs it on while we probe what is painted on top.
+    document.querySelector<HTMLElement>(".wp-chrome")!.style.pointerEvents = "auto";
+    const out: string[] = [];
+    for (let x = 4; x < window.innerWidth; x += 24)
+      for (const y of [2, h / 2, h - 2]) {
+        const el = document.elementFromPoint(x, y);
+        if (el && !el.closest(".wp-chrome")) out.push(`${x},${y} ${el.tagName} ${(el.textContent ?? "").trim().slice(0, 20)}`);
+      }
+    return out;
+  }, { h: bar.height });
+  expect(leaks).toEqual([]);
+  const bg = await page.locator(".wp-chrome").evaluate((el) => getComputedStyle(el).backgroundColor);
+  const rootBg = await page.locator(".wp-root").evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bg).toBe(rootBg);
+});
+

@@ -4,6 +4,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import type { GameCtx, GamePhase } from "@/lib/game/types";
 import type { PersistedGameState } from "@/lib/game/state";
+import { previewState, type PreviewOpts } from "@/lib/game/preview";
 import type { UsedWord } from "@/lib/game/types";
 import { useRoomActions } from "@/lib/game/actions";
 import {
@@ -46,6 +47,8 @@ type Props = {
   roomCode?: string;
   initialState?: PersistedGameState | null;
   showReconnect?: boolean;
+  /** Dev-only: seat and state without any network (`lib/game/preview.ts`). */
+  preview?: PreviewOpts;
 };
 
 export function WordpinchUI({
@@ -53,6 +56,7 @@ export function WordpinchUI({
   roomCode,
   initialState = null,
   showReconnect = false,
+  preview,
 }: Props) {
   const clientId = useClientId();
   const [storedName] = useStoredString("name");
@@ -70,7 +74,7 @@ export function WordpinchUI({
   // Resolve role (host / guest / spectator) before anything else. While
   // resolving, treat the caller as "not the host" so we don't briefly show
   // host-only UI (Start, settings edit, etc.) to a joining guest.
-  const channelCode = roomCode && clientId ? roomCode : null;
+  const channelCode = roomCode && clientId && !preview ? roomCode : null;
   // `useMyRole` needs to apply the post-join state to `liveState`, but
   // `applyState` itself comes from `useRoomChannel` which is called
   // *after* `useMyRole`. Bridge via a ref + stable wrapper: the wrapper
@@ -84,12 +88,14 @@ export function WordpinchUI({
     },
     []
   );
-  const { role, failed: roleFailed, retry: retryRole } = useMyRole({
+  const { role: resolvedRole, failed: roleFailed, retry: retryRole } = useMyRole({
     code: channelCode,
     clientId,
     name: storedName,
     applyState: applyStateBridge,
   });
+  const role = preview?.as ?? resolvedRole;
+  const previewSeed = React.useMemo(() => (preview ? previewState(preview) : null), [preview]);
 
   const {
     state: liveState,
@@ -102,7 +108,7 @@ export function WordpinchUI({
     clientId: clientId || "00000000-0000-0000-0000-000000000000",
     name: storedName.trim() || undefined,
     role: role ?? undefined,
-    initialState,
+    initialState: previewSeed ?? initialState,
   });
 
   // Populate the bridge ref so `applyStateBridge` (passed to

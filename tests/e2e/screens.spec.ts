@@ -14,10 +14,7 @@ import {
  * rewrites the screen (docs/redesign/01-inventory.md). Matching is by text
  * prefix, so anything new still fails.
  */
-const KNOWN_OVERFLOW: Record<string, RegExp[]> = {
-  // R5 rewrites the lobby: the "add your name" hint and the tie toggle.
-  lobby: [/Add your name/, /nobody/, /replay/, /split/, /^"Tie behavior/, /Players/, /^"Settings/, /Tied round/],
-};
+const KNOWN_OVERFLOW: Record<string, RegExp[]> = {};
 
 function unexpected(found: string[], phase: string) {
   const known = KNOWN_OVERFLOW[phase] ?? [];
