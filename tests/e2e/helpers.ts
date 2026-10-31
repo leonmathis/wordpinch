@@ -134,7 +134,19 @@ export async function findSmallTargets(page: Page, root = "body") {
  */
 export async function findLowContrast(page: Page, root = "body") {
   return page.evaluate((root) => {
-    const toRgb = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+    // Any CSS colour (rgb, oklab, color-mix results) to sRGB + alpha via a
+    // canvas, so translucent fills like `bg-card/45` are read correctly.
+    const cv = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const rgba = (c: string): [number, number, number, number] => {
+      cv.clearRect(0, 0, 1, 1);
+      cv.fillStyle = "#000";
+      cv.fillStyle = c;
+      cv.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = cv.getImageData(0, 0, 1, 1).data;
+      return [r, g, b, a / 255];
+    };
+    const over = (top: [number, number, number, number], under: number[]) =>
+      [0, 1, 2].map((i) => top[i] * top[3] + under[i] * (1 - top[3]));
     const lum = ([r, g, b]: number[]) => {
       const f = (v: number) => {
         v /= 255;
@@ -155,17 +167,21 @@ export async function findLowContrast(page: Page, root = "body") {
       const c = back.tagName.toLowerCase() === "svg"
         ? getComputedStyle(back.querySelector("polygon, circle")!).fill
         : getComputedStyle(back).backgroundColor;
-      return c.startsWith("rgb") ? c : null;
+      return c.startsWith("rgb") || c.startsWith("oklab") || c.startsWith("color") ? c : null;
     };
-    const bgOf = (el: Element | null): string => {
+    // Background behind `el`: translucent layers composited over whatever
+    // is under them, down to the first opaque one (or the body).
+    const bgOf = (el: Element | null): number[] => {
+      const layers: [number, number, number, number][] = [];
       const fill = el ? shapeFill(el) : null;
-      if (fill) return fill;
-      while (el) {
-        const c = getComputedStyle(el).backgroundColor;
-        if (c && !c.startsWith("rgba(0, 0, 0, 0)") && c !== "transparent") return c;
-        el = el.parentElement;
+      if (fill) layers.push(rgba(fill));
+      for (let cur = el; cur && !(layers.length > 0 && layers[layers.length - 1][3] >= 1); cur = cur.parentElement) {
+        const c = rgba(getComputedStyle(cur).backgroundColor);
+        if (c[3] > 0) layers.push(c);
       }
-      return getComputedStyle(document.body).backgroundColor;
+      let base = rgba(getComputedStyle(document.body).backgroundColor).slice(0, 3);
+      for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
+      return base;
     };
     const dimmed = (el: Element | null) => {
       for (; el; el = el.parentElement) {
@@ -181,7 +197,8 @@ export async function findLowContrast(page: Page, root = "body") {
       const cs = getComputedStyle(el);
       const size = parseFloat(cs.fontSize);
       const large = size >= 24 || (size >= 18.66 && parseInt(cs.fontWeight) >= 700);
-      const r = ratio(toRgb(cs.color), toRgb(bgOf(el)));
+      const bg = bgOf(el);
+      const r = ratio(over(rgba(cs.color), bg), bg);
       if (r < (large ? 3 : 4.5)) out.push(`${el.textContent!.trim().slice(0, 30)} ${r.toFixed(2)}`);
     }
     return out;

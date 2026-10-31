@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { attachScreenshot, collectConsoleErrors, expectNoErrors, findHorizontalOverflow, settle } from "./helpers";
+import { attachScreenshot, collectConsoleErrors, expectNoErrors, findHorizontalOverflow, findLowContrast, settle } from "./helpers";
 
 test.describe("/dev/kit", () => {
   test.beforeEach(async ({ page }) => {
@@ -137,6 +137,23 @@ test.describe("/dev/kit", () => {
     );
     expect(await page.locator('[data-kit="mode-grid"] button [data-shape="star"] > svg').count()).toBeGreaterThan(0);
     expect(bad).toEqual([]);
+  });
+
+  test("contrast helper: flags low contrast, reads translucent and oklab fills", async ({ page }) => {
+    await page.evaluate(() => {
+      const box = document.createElement("div");
+      box.id = "contrast-selftest";
+      box.style.background = "rgb(220, 228, 195)";
+      box.innerHTML = [
+        '<p style="color: #9aa08a">grey on sage</p>',
+        '<p style="color: #141414; background: oklab(1 0 0 / 0.45)">ink on translucent white</p>',
+        '<p style="color: oklab(0.2 0 0)">oklab ink</p>',
+        '<p style="color: rgb(20 20 20 / 0.2)">faint ink</p>',
+      ].join("");
+      document.body.prepend(box);
+    });
+    const low = await findLowContrast(page, "#contrast-selftest");
+    expect(low.map((l) => l.replace(/ [\d.]+$/, ""))).toEqual(["grey on sage", "faint ink"]);
   });
 
   test("touch targets are ≥44px", async ({ page }) => {

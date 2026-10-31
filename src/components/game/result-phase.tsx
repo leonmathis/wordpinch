@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion } from "motion/react";
 import type { GameCtx } from "@/lib/game/types";
 import { Button } from "@/components/ui/button";
-import { Play, ArrowRight } from "lucide-react";
+import { ArrowRight, Clock, Equal, LogOut, Play, RotateCcw, type LucideIcon } from "lucide-react";
 import { playDing } from "@/lib/sound";
+import { cn } from "@/lib/utils";
 import { CountUp } from "./count-up";
 import { Avatar } from "./avatar";
+import { AnchoredWord } from "./kit/anchored-word";
+import { Shape } from "./kit/shape";
 
 type SuggestResponse = {
   suggestions: string[];
@@ -26,60 +28,24 @@ const FALLBACK_DEFS = [
   },
 ];
 
-/**
- * Per-character entrance for the round-winning word. Mirrors the room
- * code stagger in the lobby — each letter pops in with a slight scale +
- * y-rise, anchor letters (first / last) keep their bolder styling via
- * the `.anchor` class. Drops to a single opacity fade for viewers with
- * `prefers-reduced-motion` set.
- */
-function StaggeredResultWord({
-  word,
-  charDelay = 0.04,
-  duration = 0.42,
-}: {
-  word: string;
-  charDelay?: number;
-  duration?: number;
-}) {
-  const reduce = useReducedMotion();
+/** Empty-state hero: an icon in a flower beside a two-line headline. */
+function Hero({ icon: Icon, fill, a, b }: { icon: LucideIcon; fill: string; a: string; b: string }) {
   return (
-    <motion.h1
-      className="result-word"
-      aria-label={word}
-      initial="initial"
-      animate="animate"
-      variants={{
-        initial: {},
-        animate: { transition: { staggerChildren: reduce ? 0 : charDelay } },
-      }}
-    >
-      {word.split("").map((c, i) => {
-        const isAnchor = i === 0 || i === word.length - 1;
-        // All lowercase, with the anchor letters carrying extra weight.
-        // Mixing cases ("TootH") made a correct word look like a typo —
-        // and the side-by-side tie view already renders lowercase.
-        const display = c.toLowerCase();
-        return (
-          <motion.span
-            key={`${word}-${i}`}
-            className={isAnchor ? "anchor" : undefined}
-            aria-hidden
-            variants={{
-              initial: reduce
-                ? { opacity: 0 }
-                : { opacity: 0, y: 10, scale: 0.85 },
-              animate: { opacity: 1, y: 0, scale: 1 },
-            }}
-            transition={{ duration, ease: [0.16, 1, 0.3, 1] }}
-            style={{ display: "inline-block" }}
-          >
-            {display}
-          </motion.span>
-        );
-      })}
-    </motion.h1>
+    <div className="flex items-center gap-4 py-2">
+      <Shape kind="flower" size={120} fill={fill}>
+        <Icon aria-hidden className="size-10" strokeWidth={2} />
+      </Shape>
+      <div className="min-w-0 [overflow-wrap:anywhere]">
+        <div className="text-[30px] leading-none font-extrabold">{a}</div>
+        <div className="font-hand text-[30px] leading-[1.1]">{b}</div>
+      </div>
+    </div>
   );
+}
+
+/** "2.40 s" from the race start, when the room has one. */
+function raceTime(submittedAt: number, raceStartedAt?: number) {
+  return raceStartedAt ? `${((submittedAt - raceStartedAt) / 1000).toFixed(2)} s` : null;
 }
 
 function speakFallback(word: string) {
@@ -103,8 +69,10 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
   const [suggestions, setSuggestions] = React.useState<string[] | null>(null);
   React.useEffect(() => {
     playDing();
+    // Browsers block vibrate() before the page has had a tap and log an
+    // intervention error for it; only buzz once the player has interacted.
     try {
-      navigator.vibrate?.(10);
+      if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(10);
     } catch {
       /* ignore */
     }
@@ -288,341 +256,261 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
 
   const word = ctx.word;
   const defs = ctx.definitions.length > 0 ? ctx.definitions : FALLBACK_DEFS;
+  const winnerName = ctx.winner === "host" ? ctx.hostName : ctx.guestName;
+  const loserName = ctx.winner === "host" ? ctx.guestName : ctx.hostName;
+  const iWon = ctx.winner === ctx.mySide;
+
+  // Canonical names everywhere — the viewer-perspective ctx.you / ctx.them
+  // flip would otherwise show the guest seeing host's name when *they*
+  // (the guest) win.
+  const title = isReplayPending
+    ? `Tied round ${ctx.round}: replaying`
+    : isForfeit
+      ? `${winnerName} wins round ${ctx.round} by forfeit`
+      : isNone && isTimeout
+        ? `Round ${ctx.round}: out of time, neither scores`
+        : isNone
+          ? `Tied round ${ctx.round}: neither scores`
+          : isSplit && isTimeout
+            ? `Tied round ${ctx.round}: out of time, both score`
+            : isSplit
+              ? `Tied round ${ctx.round}: both score`
+              : isNearMiss
+                ? `${winnerName} won round ${ctx.round} by ${nearMissDiffMs} ms`
+                : `${winnerName} won round ${ctx.round}`;
+
+  // Compute the score delta this round per side, mirroring the server-side
+  // scoring math in `computeFinalState` / `recordNearMiss`. The delta drives
+  // both the pre-increment value passed to <CountUp> and the "+N" badge, so
+  // all three (final score, animation start, badge) stay consistent even
+  // when the length-bonus setting kicks in (e.g. "+1.5" for a 6-letter solo
+  // win at min=5).
+  const meRole: "host" | "guest" = ctx.meIsHost ? "host" : "guest";
+  const themRole: "host" | "guest" = ctx.meIsHost ? "guest" : "host";
+  const bonusEnabled = ctx.settings.lengthBonus ?? false;
+  const wordBonus = (w: string | undefined) => {
+    if (!bonusEnabled || !w) return 0;
+    const extra = w.length - ctx.minWordLength;
+    return extra > 0 ? extra * 0.5 : 0;
+  };
+  const roundDelta = (side: "host" | "guest"): number => {
+    if (isReplayPending) return 0;
+    if (isForfeit) return ctx.winner === side ? 1 : 0;
+    if (isTimeout) {
+      // Timeout has no submissions to bonus; split awards 1 base to each,
+      // otherwise nobody.
+      return isSplit ? 1 : 0;
+    }
+    const attempt = ctx.resultAttempts?.find((a) => a.by === side);
+    const bonus = wordBonus(attempt?.word);
+    // Won outright OR sim-tie split (both score).
+    if (ctx.winner === side || isScoredSplit) return 1 + bonus;
+    // Tied-nobody with both submitted, or the near-miss loser: the bonus only.
+    if (attempt) return bonus;
+    return 0;
+  };
+  const scoreCards = [
+    { side: meRole, name: ctx.you.name, score: ctx.you.score, delta: roundDelta(meRole), fill: "bg-shape-yellow" },
+    { side: themRole, name: ctx.them.name, score: ctx.them.score, delta: roundDelta(themRole), fill: "bg-shape-pink" },
+  ];
+
+  const hero = isReplayPending
+    ? { icon: RotateCcw, fill: "var(--shape-sage)", a: "One more go", b: "same letters, new race" }
+    : isForfeit
+      ? {
+          icon: LogOut,
+          fill: "var(--shape-pink)",
+          a: `${loserName} left`,
+          b: iWon ? "the point is yours" : `the point goes to ${winnerName}`,
+        }
+      : isTimeout
+        ? { icon: Clock, fill: "var(--shape-yellow)", a: "Time's up!", b: isSplit ? "a point each, then" : "no point this round" }
+        : isNone
+          ? { icon: Equal, fill: "var(--shape-blue)", a: "Dead heat", b: "nobody gets the point" }
+          : null;
 
   return (
-    <>
-      <div className="wp-body">
-        <div
-          className="wp-frame scene"
-          onPointerEnter={canHold ? hold : undefined}
-          onPointerLeave={canHold ? release : undefined}
-          onFocusCapture={canHold ? hold : undefined}
-          onBlurCapture={canHold ? release : undefined}
-        >
-          {/* Canonical names everywhere — the viewer-perspective ctx.you /
-              ctx.them flip would otherwise show the guest seeing host's
-              name when *they* (the guest) win. */}
-          <div className="t-label-up">
-            {isReplayPending
-              ? `Tied round ${ctx.round} — replaying`
-              : isForfeit
-              ? `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} wins round ${ctx.round} by forfeit`
-              : isNone && isTimeout
-              ? `Tied round ${ctx.round} — out of time, neither scores`
-              : isNone
-              ? `Tied round ${ctx.round} — neither scores`
-              : isSplit && isTimeout
-              ? `Tied round ${ctx.round} — out of time, both score`
-              : isSplit
-              ? `Tied round ${ctx.round} — ${ctx.hostName} and ${ctx.guestName} both score`
-              : isNearMiss
-              ? `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round ${ctx.round} by ${nearMissDiffMs} ms`
-              : `${ctx.winner === "host" ? ctx.hostName : ctx.guestName} won round ${ctx.round}`}
-          </div>
+    <div className="wp-body">
+      <div
+        className="wp-frame scene lg:max-w-[1040px]"
+        onPointerEnter={canHold ? hold : undefined}
+        onPointerLeave={canHold ? release : undefined}
+        onFocusCapture={canHold ? hold : undefined}
+        onBlurCapture={canHold ? release : undefined}
+      >
+        <div className="grid grid-cols-1 gap-[18px] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-x-12">
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="self-start rounded-full bg-card px-3.5 py-2 text-sm font-bold [overflow-wrap:anywhere]">
+              {title}
+            </div>
 
-          {hasSideBySide ? (
-            <>
-              {/* Sim tie (split or replay_pending): render both submissions
-               *  side-by-side using the attempts captured by the resolver.
-               *  Timeout-split has no attempts → falls through to the
-               *  suggestions branch below. */}
-              <motion.div
-                className="flex flex-col sm:flex-row gap-6 sm:gap-10 mt-2 items-start sm:items-center sm:justify-center"
-                initial="initial"
-                animate="animate"
-                variants={{
-                  initial: {},
-                  // Columns stagger 80 ms apart so the eye reads
-                  // attempt[0] (the winner) first, then the
-                  // near-miss / co-tied attempt. Skipped under
-                  // reduced motion via the column variant below.
-                  animate: { transition: { staggerChildren: 0.08 } },
-                }}
-              >
-                {sideBySideAttempts.map((a, idx) => {
-                  const playerName =
-                    a.by === "host" ? ctx.hostName : ctx.guestName;
-                  // In a near-miss the first attempt is the winner; the
-                  // second is the loser whose submission landed in the
-                  // grace window. Dim the loser column for visual hierarchy.
-                  const isLoserInNearMiss = isNearMiss && idx === 1;
-                  return (
-                    <motion.div
-                      key={`${a.by}-${a.word}`}
-                      className="flex flex-col items-center"
-                      style={{
-                        opacity: isLoserInNearMiss ? 0.55 : 1,
-                      }}
-                      variants={{
-                        initial: { opacity: 0, y: 10 },
-                        animate: {
-                          // Re-apply the dim-loser opacity here so the
-                          // variant doesn't override it back to 1 mid-fade.
-                          opacity: isLoserInNearMiss ? 0.55 : 1,
-                          y: 0,
-                        },
-                      }}
-                      transition={{
-                        duration: 0.4,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
-                    >
+            {hero ? (
+              <Hero {...hero} />
+            ) : hasSideBySide ? (
+              <>
+                {/* Sim tie or near-miss: both submissions side by side.
+                 *  `slide-up-in` is reduced-motion guarded; the old
+                 *  per-column stagger was not. */}
+                <div className="slide-up-in grid grid-cols-2 gap-2.5">
+                  {sideBySideAttempts.map((a, idx) => {
+                    const playerName = a.by === "host" ? ctx.hostName : ctx.guestName;
+                    // In a near-miss the first attempt is the winner. The
+                    // loser's card steps back with a lighter fill, not with
+                    // opacity, so its text keeps full contrast.
+                    const isLoserInNearMiss = isNearMiss && idx === 1;
+                    const time = raceTime(a.submittedAt, ctx.raceStartedAt);
+                    const meta = [time, isNearMiss && idx === 0 ? "winner" : null].filter(Boolean).join(" · ");
+                    return (
                       <div
-                        className="flex items-center gap-2"
-                        style={{ marginBottom: 6 }}
+                        key={`${a.by}-${a.word}`}
+                        className={cn(
+                          "flex min-w-0 flex-col gap-2 rounded-[26px] px-3.5 py-4",
+                          isLoserInNearMiss ? "bg-card/45" : "bg-card"
+                        )}
                       >
-                        <Avatar name={playerName} size={20} side={a.by} />
-                        <span className="t-label-up">{playerName}</span>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Avatar name={playerName} size={30} side={a.by} />
+                          <span className="truncate text-sm font-bold">{playerName}</span>
+                        </div>
+                        <AnchoredWord word={a.word.toLowerCase()} size="md" className="!text-[30px]" />
+                        {meta ? <div className="text-[13px] font-semibold text-muted-foreground">{meta}</div> : null}
                       </div>
-                      <h2
-                        className="result-word"
-                        style={{ fontSize: 40, lineHeight: 1.1 }}
-                      >
-                        <span className="anchor">{a.word[0]}</span>
-                        <span>{a.word.slice(1, -1)}</span>
-                        <span className="anchor">
-                          {a.word[a.word.length - 1]}
-                        </span>
-                      </h2>
-                      {a.ipa ? (
-                        <span
-                          className="result-ipa"
-                          style={{ fontSize: 14, marginTop: 4 }}
-                        >
-                          {a.ipa}
+                    );
+                  })}
+                </div>
+                {isNearMiss ? (
+                  <div className="-rotate-2 font-hand text-2xl">{`photo finish! ${nearMissDiffMs} ms apart`}</div>
+                ) : null}
+              </>
+            ) : isSingleWinner ? (
+              <div className="slide-up-in flex flex-col gap-2.5">
+                <h1 className="m-0" aria-label={word}>
+                  <AnchoredWord word={word.toLowerCase()} size="md" className="lg:hidden" />
+                  <AnchoredWord word={word.toLowerCase()} size="lg" className="hidden lg:inline" />
+                </h1>
+                <div className="flex items-center gap-2">
+                  {ctx.ipa ? <span className="text-base font-semibold text-muted-foreground">{ctx.ipa}</span> : null}
+                  <Button
+                    variant="pill"
+                    size="circle"
+                    aria-label={ctx.muted ? "Pronunciation muted. Turn sound on in Settings" : "Play pronunciation"}
+                    onClick={playPronunciation}
+                    disabled={ctx.muted}
+                  >
+                    <Play fill="currentColor" />
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-4 rounded-[26px] bg-card px-[18px] py-4">
+                  {defs.map((d) => (
+                    <div key={`${d.partOfSpeech}-${d.definition.slice(0, 40)}`} className="flex flex-col gap-1.5">
+                      {d.partOfSpeech ? (
+                        <span className="self-start rounded-full bg-shape-yellow px-2.5 py-0.5 text-xs font-extrabold text-[#141414]">
+                          {d.partOfSpeech}
                         </span>
                       ) : null}
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-              {isReplayPending ? (
-                <div
-                  className="t-label text-center"
-                  style={{ marginTop: 24 }}
-                >
-                  Replaying round shortly…
-                </div>
-              ) : null}
-            </>
-          ) : isForfeit ? (
-            // Forfeit: opponent stayed disconnected through the 10s grace
-            // period. The title above (X wins round Y by forfeit) tells
-            // the whole story — no word was played. Suggestions still
-            // render below this branch.
-            null
-          ) : !isNone && !isSplit ? (
-            <>
-              <StaggeredResultWord word={word} />
-
-              <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
-                {ctx.ipa ? (
-                  <span className="result-ipa">{ctx.ipa}</span>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={
-                    ctx.muted
-                      ? "Pronunciation muted — unmute in the top bar"
-                      : "Play pronunciation"
-                  }
-                  className="h-7 w-7"
-                  onClick={playPronunciation}
-                  disabled={ctx.muted}
-                  type="button"
-                >
-                  <Play strokeWidth={1.7} className="size-[15px]" />
-                </Button>
-              </div>
-
-              <div style={{ marginTop: 28 }}>
-                {defs.map((d) => (
-                  <div
-                    key={`${d.partOfSpeech}-${d.definition.slice(0, 40)}`}
-                    className="def-block"
-                  >
-                    <div className="def-label">{d.partOfSpeech || "—"}</div>
-                    <div className="def">{d.definition}</div>
-                    {d.example ? (
-                      <div className="ex">&ldquo;{d.example}&rdquo;</div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : null}
-
-          {/* Suggestions: rendered for every non-replay outcome (win,
-           *  lose, sim-tie, near-miss, timeout, forfeit) so the players
-           *  always see a handful of alternative words that would have
-           *  worked. Headline reads "Other words..." when there *is* a
-           *  played word above this block, plain "Words..." otherwise,
-           *  so the grammar lands for both contexts. */}
-          {shouldFetchSuggestions ? (
-            <div style={{ marginTop: 28 }}>
-              <div className="t-label-up" style={{ marginBottom: 8 }}>
-                {isSingleWinner && !isForfeit
-                  ? "Other words that worked"
-                  : hasSideBySide
-                  ? "Other words that worked"
-                  : "Words you could have played"}
-              </div>
-              {suggestions === null ? (
-                <div className="t-label">
-                  Looking for examples
-                  <span className="typing-dots ml-1">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </div>
-              ) : suggestions.length === 0 ? (
-                <div className="t-label">
-                  No {ctx.minWordLength}+ letter words start with{" "}
-                  <b style={{ color: "var(--foreground)" }}>{ctx.letterStart}</b>{" "}
-                  and end with{" "}
-                  <b style={{ color: "var(--foreground)" }}>{ctx.letterEnd}</b>
-                  . Tough round.
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[14px]">
-                  {suggestions.map((w) => (
-                    <span key={w}>{w}</span>
+                      <div className="text-base leading-[1.4] font-semibold">{d.definition}</div>
+                      {d.example ? (
+                        <div className="font-hand text-[21px] text-muted-foreground">{`“${d.example}”`}</div>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
-          ) : null}
-
-          <div className="flex items-center justify-between" style={{ marginTop: 28 }}>
-            <div
-              className="flex items-center gap-4 font-mono relative"
-              style={{ fontSize: 13 }}
-            >
-              {(() => {
-                // Compute the score delta this round per side, mirroring the
-                // server-side scoring math in `computeFinalState` /
-                // `recordNearMiss`. The delta drives both the pre-increment
-                // value passed to <CountUp> and the "+N" float, so all three
-                // (final score, animation start, badge) stay consistent
-                // even when the length-bonus setting kicks in (e.g. "+1.5"
-                // for a 6-letter solo win at min=5).
-                const meRole: "host" | "guest" = ctx.meIsHost ? "host" : "guest";
-                const themRole: "host" | "guest" = ctx.meIsHost ? "guest" : "host";
-                const bonusEnabled = ctx.settings.lengthBonus ?? false;
-                const wordBonus = (word: string | undefined) => {
-                  if (!bonusEnabled || !word) return 0;
-                  const extra = word.length - ctx.minWordLength;
-                  return extra > 0 ? extra * 0.5 : 0;
-                };
-                const roundDelta = (side: "host" | "guest"): number => {
-                  if (isReplayPending) return 0;
-                  if (isForfeit) return ctx.winner === side ? 1 : 0;
-                  if (isTimeout) {
-                    // Timeout has no submissions to bonus; split awards 1
-                    // base to each, otherwise nobody.
-                    return isSplit ? 1 : 0;
-                  }
-                  const myAttempt = ctx.resultAttempts?.find(
-                    (a) => a.by === side
-                  );
-                  const bonus = wordBonus(myAttempt?.word);
-                  // Won outright OR sim-tie split (both score).
-                  if (ctx.winner === side || isScoredSplit) {
-                    return 1 + bonus;
-                  }
-                  // Tied-nobody with both submitted: only the bonus.
-                  if (isNone && myAttempt) return bonus;
-                  // Other side won outright; near-miss attempt (if any)
-                  // earns just the bonus.
-                  if (myAttempt) return bonus;
-                  return 0;
-                };
-                const yourDelta = roundDelta(meRole);
-                const themDelta = roundDelta(themRole);
-                const youGotPoint = yourDelta > 0;
-                const themGotPoint = themDelta > 0;
-                const yourPrev = ctx.you.score - yourDelta;
-                const theirPrev = ctx.them.score - themDelta;
-                return (
-                  <>
-                    <span className="relative">
-                      <span className="text-muted-foreground">{ctx.you.name}</span>{" "}
-                      <span className="tabular-nums">
-                        <CountUp from={yourPrev} to={ctx.you.score} />
-                      </span>
-                      {showDelta && youGotPoint ? (
-                        <span
-                          className="score-delta float-up"
-                          style={{ position: "absolute", marginLeft: 6 }}
-                        >
-                          +{yourDelta}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-muted-foreground">·</span>
-                    <span className="relative">
-                      <span className="text-muted-foreground">{ctx.them.name}</span>{" "}
-                      <span className="tabular-nums">
-                        <CountUp from={theirPrev} to={ctx.them.score} />
-                      </span>
-                      {showDelta && themGotPoint ? (
-                        <span
-                          className="score-delta float-up"
-                          style={{ position: "absolute", marginLeft: 6 }}
-                        >
-                          +{themDelta}
-                        </span>
-                      ) : null}
-                    </span>
-                  </>
-                );
-              })()}
-            </div>
-            {ctx.meIsReferee ? (
-              <Button
-                variant="link"
-                onClick={() => {
-                  if (ctx.actions.ready) {
-                    void ctx.actions.nextRound();
-                  } else {
-                    ctx.setPhase("matchend");
-                  }
-                }}
-                className="link-underline h-auto p-0 gap-1.5 font-mono text-[13px] text-foreground no-underline hover:no-underline"
-              >
-                Next <ArrowRight strokeWidth={1.7} className="size-[13px]" />
-              </Button>
+              </div>
             ) : null}
           </div>
 
-          {/* Says why nothing is moving — a frozen progress bar with no
-           *  explanation reads as broken. */}
-          {held ? (
-            <div className="t-label text-right" style={{ marginTop: 8 }}>
-              Paused while you read
-            </div>
-          ) : null}
+          <div className="flex min-w-0 flex-col gap-4">
+            {/* Suggestions: every non-replay outcome, so the players always
+             *  see a few words that would have worked. */}
+            {shouldFetchSuggestions ? (
+              <section aria-labelledby="result-suggestions">
+                <h2 id="result-suggestions" className="m-0 mb-2.5 text-lg font-bold">
+                  {(isSingleWinner && !isForfeit) || hasSideBySide ? "Other words that worked" : "Words you could have played"}
+                </h2>
+                {suggestions === null ? (
+                  <div className="text-sm font-semibold text-muted-foreground">
+                    Looking for examples
+                    <span aria-hidden className="typing-dots ml-1">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  </div>
+                ) : suggestions.length === 0 ? (
+                  <div className="text-sm font-semibold text-muted-foreground">
+                    {`No ${ctx.minWordLength}+ letter words start with ${ctx.letterStart} and end with ${ctx.letterEnd}. Tough round.`}
+                  </div>
+                ) : (
+                  <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+                    {suggestions.map((w) => (
+                      <li key={w} className="flex h-10 items-center rounded-full bg-card px-4 text-[15px] font-bold tracking-[0.5px]">
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
 
-          {/* The fill duration is driven by the same value that schedules the
-           *  advance. It was hard-coded to 5s in CSS while the replay path
-           *  advanced at 4.2s, so the bar promised time the round didn't
-           *  have. */}
-          <div
-            className="advance-bar"
-            data-held={held ? "true" : undefined}
-            style={
-              {
-                marginTop: 14,
-                "--advance-duration": `${advanceMs}ms`,
-              } as React.CSSProperties
-            }
-          >
-            <i />
+            <div className="grid grid-cols-2 gap-2.5">
+              {scoreCards.map((c) => (
+                <div key={c.side} className={cn("relative min-w-0 rounded-[26px] px-4 py-3.5 text-[#141414]", c.fill)}>
+                  <div className="truncate pr-11 text-sm font-bold">{c.name}</div>
+                  <div className="text-[40px] leading-none font-extrabold tabular-nums">
+                    <CountUp from={c.score - c.delta} to={c.score} />
+                  </div>
+                  {showDelta && c.delta > 0 ? (
+                    <span className="absolute top-3 right-3.5 rounded-full bg-[#141414] px-2.5 py-1 text-sm font-extrabold text-white">
+                      +{c.delta}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2.5 lg:mt-auto">
+              {/* The fill duration is driven by the same value that
+               *  schedules the advance, and it freezes while held. */}
+              <div
+                className="advance-bar"
+                data-held={held ? "true" : undefined}
+                style={{ "--advance-duration": `${advanceMs}ms` } as React.CSSProperties}
+                aria-hidden
+              >
+                <i />
+              </div>
+              {fireReplay ? (
+                <div role="status" className="flex h-14 items-center justify-center rounded-full bg-card text-base font-bold">
+                  Replaying round shortly…
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  {/* Says why nothing is moving: a frozen bar with no
+                   *  explanation reads as broken. */}
+                  <span className="min-w-0 flex-1 text-sm font-semibold text-muted-foreground" aria-live="polite">
+                    {held ? "Paused while you read" : ctx.meIsReferee ? "" : "Next round in a moment…"}
+                  </span>
+                  {ctx.meIsReferee ? (
+                    <Button
+                      variant="pill"
+                      size="pill-lg"
+                      onClick={() => {
+                        if (ctx.actions.ready) {
+                          void ctx.actions.nextRound();
+                        } else {
+                          ctx.setPhase("matchend");
+                        }
+                      }}
+                    >
+                      Next round <ArrowRight />
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

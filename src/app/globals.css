@@ -510,12 +510,12 @@
   }
 
   .advance-bar {
-    @apply relative w-full;
-    height: 1px;
-    background: var(--border);
+    @apply relative w-full overflow-hidden rounded-full;
+    height: 6px;
+    background: color-mix(in oklch, var(--foreground) 15%, transparent);
   }
   .advance-bar > i {
-    @apply absolute top-0 left-0 h-full;
+    @apply absolute top-0 left-0 h-full rounded-full;
     background: var(--foreground);
     /* Duration comes from the phase that owns the timer (ResultPhase sets
      * --advance-duration), so the bar can't finish late or early. */

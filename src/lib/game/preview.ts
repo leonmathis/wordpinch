@@ -19,11 +19,73 @@ export type PreviewOpts = {
   oppSubmitted: boolean;
   /** Your own word is in: the settling screen (`?settling=1`). */
   settling: boolean;
+  /** Round result variant (`?result=…`), for phase=result. */
+  result: ResultVariant;
 };
+
+export const RESULT_VARIANTS = [
+  "win",
+  "nearmiss",
+  "split",
+  "splittimeout",
+  "nobody",
+  "nobodytimeout",
+  "forfeit",
+  "replay",
+] as const;
+export type ResultVariant = (typeof RESULT_VARIANTS)[number];
+
+const RACE_START = 1_000_000;
+const TOOTH = {
+  phonetic: "/tuːθ/",
+  definitions: [
+    {
+      partOfSpeech: "noun",
+      definition: "One of the hard white structures in the mouth, used for biting and chewing.",
+      example: "She chipped a tooth on the ice.",
+    },
+  ],
+};
+
+/** Round 3's result and the scores after it, host = Leon. */
+function resultFor(v: ResultVariant, stress: boolean): Pick<PersistedGameState, "result" | "scores"> {
+  const word = stress ? "thoroughbredsmith" : "tooth";
+  const at = (by: "host" | "guest", w: string, ms: number) => ({ by, word: w, submittedAt: RACE_START + ms });
+  switch (v) {
+    case "win":
+      return { scores: { host: 3, guest: 1 }, result: { winner: "host", word, ...TOOTH, attempts: [at("host", word, 2400)] } };
+    case "nearmiss":
+      return {
+        scores: { host: 3, guest: 1 },
+        result: { winner: "host", word, ...TOOTH, attempts: [at("host", word, 2400), at("guest", "teeth", 2540)] },
+      };
+    case "split":
+      return {
+        scores: { host: 3, guest: 2 },
+        result: { winner: "split", word, ...TOOTH, attempts: [at("host", word, 2400), at("guest", "truth", 2400)] },
+      };
+    case "splittimeout":
+      return { scores: { host: 3, guest: 2 }, result: { winner: "split", reason: "timeout" } };
+    case "nobody":
+      return {
+        scores: { host: 2, guest: 1 },
+        result: { winner: "none", reason: "tied_nobody", attempts: [at("host", word, 2400), at("guest", "truth", 2400)] },
+      };
+    case "nobodytimeout":
+      return { scores: { host: 2, guest: 1 }, result: { winner: "none", reason: "timeout" } };
+    case "forfeit":
+      return { scores: { host: 3, guest: 1 }, result: { winner: "host", reason: "forfeit" } };
+    case "replay":
+      return {
+        scores: { host: 2, guest: 1 },
+        result: { winner: "split", reason: "replay_pending", attempts: [at("host", word, 2400), at("guest", "truth", 2400)] },
+      };
+  }
+}
 
 export function parsePreview(
   phase: GamePhase,
-  sp: { as?: string; guest?: string; stress?: string; away?: string; opp?: string; settling?: string }
+  sp: { as?: string; guest?: string; stress?: string; away?: string; opp?: string; settling?: string; result?: string }
 ): PreviewOpts | null {
   if (sp.as !== "host" && sp.as !== "guest") return null;
   return {
@@ -35,6 +97,7 @@ export function parsePreview(
     away: sp.away === "1",
     oppSubmitted: sp.opp === "submitted",
     settling: sp.settling === "1",
+    result: (RESULT_VARIANTS as readonly string[]).includes(sp.result ?? "") ? (sp.result as ResultVariant) : "win",
   };
 }
 
@@ -58,6 +121,9 @@ export function previewState(opts: PreviewOpts): PersistedGameState {
             { round: 2, winner: "guest" as const },
           ],
           pick: { hostLetter: "T", guestLetter: "H", firstPicker: "host" as const },
+          // Only the result reads it (for "2.40 s"); in the race it would
+          // drain the clock.
+          ...(opts.phase === "result" ? { raceStartedAt: RACE_START, ...resultFor(opts.result, opts.stress) } : {}),
           ...(opts.oppSubmitted || opts.settling
             ? {
                 pendingResult: {
