@@ -11,7 +11,12 @@ type Props = {
   onShare?: () => void;
   /** Room code when in a room; the menu then offers share and leave. */
   roomCode?: string;
+  /** Inline score, "Leon 2 · 1 Juno", next to the round label. */
+  score?: { you: { name: string; score: number }; them: { name: string; score: number } };
 };
+
+/** Names are capped so a 32-character name can't push the gear away. */
+const NAME = "inline-block max-w-[9ch] truncate align-bottom";
 
 /** Pill width so up to 15 rounds fit in ~180px next to the gear. */
 function pillWidth(total: number) {
@@ -23,7 +28,7 @@ function pillWidth(total: number) {
  * wordmark outside a match), one settings gear on the right. Theme, sound,
  * share and leave live in the gear's menu.
  */
-export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, roomCode }: Props) {
+export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, roomCode, score }: Props) {
   const inMatch = round > 0 && total > 0;
   const width = inMatch ? pillWidth(total) : 0;
 
@@ -31,8 +36,16 @@ export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, room
     <div className="wp-chrome items-center">
       {inMatch ? (
         <div className="flex flex-col gap-1.5">
-          <div className="text-[13px] font-bold">
+          <div className="text-[13px] font-bold whitespace-nowrap">
             Round {round} of {total}
+            {score ? (
+              <>
+                {" · "}
+                <span className={NAME}>{score.you.name}</span> {score.you.score}
+                {" · "}
+                {score.them.score} <span className={NAME}>{score.them.name}</span>
+              </>
+            ) : null}
           </div>
           <div className="flex gap-1" aria-hidden>
             {Array.from({ length: total }, (_, i) => (

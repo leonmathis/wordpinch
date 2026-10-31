@@ -126,7 +126,9 @@ export function WordpinchUI({
   // opponent so the value is locked true for them.
   const opponentRole =
     role === "host" ? "guest" : role === "guest" ? "host" : null;
-  const opponentOnline = !opponentRole
+  const opponentOnline = preview
+    ? !preview.away
+    : !opponentRole
     ? true
     : !presenceReady
     ? true
@@ -408,6 +410,9 @@ export function WordpinchUI({
         onToggleMute={ctx.toggleMute}
         onShare={ctx.openShare}
         roomCode={roomCode && phase !== "landing" ? ctx.roomCode : undefined}
+        // Phases already on the redesign carry the score in the top bar;
+        // the rest still show ScoreHud until their round (R7, R8).
+        score={phase === "pick" && role !== "spectator" ? { you: ctx.you, them: ctx.them } : undefined}
       />
 
       {/* Spectator routing: any client whose role resolved to 'spectator'

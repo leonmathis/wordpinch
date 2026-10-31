@@ -66,6 +66,7 @@ A dev-only phase strip at the bottom of `/r/[code]` is gated by `process.env.NOD
 - **`prefers-reduced-motion`** is honored on all entrance/scene animations.
 - **Async params/searchParams.** In Next 16, both are Promises and must be `await Promise.all([params, searchParams])`.
 - **Ternaries, not `&&`** for conditional rendering — `&&` with a number type renders `0` as text.
+- **Space after an expression:** `{name} still waiting` loses its space when the JSX text runs on to a line break (the toolchain trims it; same line before the closing tag is fine). Use a template string (`{`${name} still waiting`}`) or `{" "}`.
 
 ## Common tasks
 

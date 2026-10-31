@@ -4,6 +4,7 @@ import * as React from "react";
 import { Pause } from "lucide-react";
 import type { GameCtx } from "@/lib/game/types";
 import { StatusPill } from "./kit/status-pill";
+import { cn } from "@/lib/utils";
 
 /**
  * Grace period (ms) after the opponent drops out of presence before the
@@ -38,7 +39,7 @@ const GRACE_SECONDS = Math.ceil(FORFEIT_GRACE_MS / 1000);
  * `ctx.meIsReferee`) fires the forfeit, and it keeps retrying while the
  * banner is mounted so a handover landing mid-countdown still resolves.
  */
-export function OpponentAwayBanner({ ctx }: { ctx: GameCtx }) {
+export function OpponentAwayBanner({ ctx, className }: { ctx: GameCtx; className?: string }) {
   const [secondsLeft, setSecondsLeft] = React.useState(GRACE_SECONDS);
 
   // Latest values reachable from the timers without re-arming them on every
@@ -99,7 +100,7 @@ export function OpponentAwayBanner({ ctx }: { ctx: GameCtx }) {
   }, []);
 
   return (
-    <StatusPill tone="attention" icon={<Pause fill="currentColor" />} className="mb-4">
+    <StatusPill tone="attention" icon={<Pause fill="currentColor" />} className={cn("mb-4", className)}>
       {secondsLeft > 0 ? (
         <>
           {ctx.them.name} disconnected. They forfeit in{" "}

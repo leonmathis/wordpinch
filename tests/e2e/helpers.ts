@@ -146,7 +146,20 @@ export async function findLowContrast(page: Page, root = "body") {
       const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       return (x + 0.05) / (y + 0.05);
     };
+    // Text in a Shape sits on its backdrop, a sibling (span or SVG), not an
+    // ancestor; read that fill. Rings are outlines, so they fall through.
+    const shapeFill = (el: Element) => {
+      const shape = el.closest("[data-shape]");
+      if (!shape || shape.getAttribute("data-shape") === "ring") return null;
+      const back = shape.firstElementChild!;
+      const c = back.tagName.toLowerCase() === "svg"
+        ? getComputedStyle(back.querySelector("polygon, circle")!).fill
+        : getComputedStyle(back).backgroundColor;
+      return c.startsWith("rgb") ? c : null;
+    };
     const bgOf = (el: Element | null): string => {
+      const fill = el ? shapeFill(el) : null;
+      if (fill) return fill;
       while (el) {
         const c = getComputedStyle(el).backgroundColor;
         if (c && !c.startsWith("rgba(0, 0, 0, 0)") && c !== "transparent") return c;

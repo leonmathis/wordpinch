@@ -250,9 +250,13 @@
   .count-pop,
   .slide-up-in,
   .letter-pop,
-  .pulse-soft {
+  .pulse-soft,
+  .typing-dots i {
     animation: none;
   }
+  /* Still reads as "…" without the loop. */
+  .typing-dots i:nth-child(2) { opacity: 0.6; }
+  .typing-dots i:nth-child(3) { opacity: 0.3; }
 }
 
 @layer components {
