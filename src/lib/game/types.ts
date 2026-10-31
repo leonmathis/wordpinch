@@ -1,5 +1,7 @@
 import type { RoomActions } from "./actions";
 import type { PersistedGameState } from "./state";
+import type { Incoming } from "../room-fx";
+import type { ReactionId } from "./reactions";
 
 /** Display shape for a player slot in the UI. Server stores only `name`
  *  (in state.players), but the UI thinks in name+score pairs. */
@@ -147,6 +149,17 @@ export type GameCtx = {
    * `previewCount` stands in for the match-end banner's count.
    */
   collection: { enabled: boolean; preview: boolean; previewCount: number };
+  /**
+   * F3 reactions, cheers and letter counts (`lib/room-fx.ts`). Cosmetic:
+   * `incoming` is the latest reaction or cheer from someone else, `lens`
+   * the current round's letter count per seat (null until reported).
+   */
+  fx: {
+    incoming: Incoming | null;
+    lens: Record<"host" | "guest", number | null>;
+    react: (id: ReactionId) => void;
+    typing: (len: number) => void;
+  };
   shareOpen: boolean;
   reconnectOpen: boolean;
   openShare: () => void;

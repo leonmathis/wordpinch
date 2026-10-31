@@ -1,4 +1,5 @@
 import { initialGameState, type PersistedGameState } from "./state";
+import { REACTIONS, type ReactionId } from "./reactions";
 import type { GamePhase } from "./types";
 
 /**
@@ -27,6 +28,10 @@ export type PreviewOpts = {
   rounds: 7 | 15;
   /** Match-end collection banner count (`?collected=3`), 0 hides it. */
   collected: number;
+  /** An incoming reaction or cheer (`?rx=close`, `?rx=go-host`). */
+  rx: ReactionId | null;
+  /** The opponent's letter count in the race (`?typed=4`). */
+  typed: number | null;
 };
 
 export const RESULT_VARIANTS = [
@@ -150,6 +155,8 @@ export function parsePreview(
     end?: string;
     rounds?: string;
     collected?: string;
+    rx?: string;
+    typed?: string;
   }
 ): PreviewOpts | null {
   if (sp.as !== "host" && sp.as !== "guest" && sp.as !== "spectator") return null;
@@ -166,6 +173,8 @@ export function parsePreview(
     end: sp.end === "loss" || sp.end === "tie" ? sp.end : "win",
     rounds: sp.rounds === "15" ? 15 : 7,
     collected: Math.max(0, Math.min(99, Number.parseInt(sp.collected ?? "0", 10) || 0)),
+    rx: sp.rx && Object.hasOwn(REACTIONS, sp.rx) ? (sp.rx as ReactionId) : null,
+    typed: sp.typed && /^\d{1,2}$/.test(sp.typed) ? Number(sp.typed) : null,
   };
 }
 

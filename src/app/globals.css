@@ -204,6 +204,18 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes advance-fill { from { width: 0%; } to { width: 100%; } }
+/* F3 reaction bubble: pops in, holds, fades. Ends invisible (fill both). */
+@keyframes fx-bubble {
+  0%   { opacity: 0; transform: translateY(6px) rotate(-3deg) scale(0.9); }
+  8%   { opacity: 1; transform: translateY(0) rotate(-3deg) scale(1); }
+  82%  { opacity: 1; transform: translateY(0) rotate(-3deg) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) rotate(-3deg) scale(1); visibility: hidden; }
+}
+@keyframes fx-bubble-fade {
+  0%   { opacity: 0; }
+  8%, 82% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
 @keyframes timer-urgency-pulse {
   0%, 100% { transform: scale(1); }
   40%      { transform: scale(1.18); }
@@ -214,6 +226,9 @@
   .shake { animation: shake 200ms ease-in-out; }
   .count-pop { animation: count-pop 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .slide-up-in { animation: slide-up-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .fx-bubble { transform: rotate(-3deg); animation: fx-bubble 2800ms ease-out both; }
+  /* Dev previews keep the bubble up so it can be measured. */
+  .fx-bubble[data-hold] { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -223,6 +238,9 @@
   .typing-dots i {
     animation: none;
   }
+  /* Still disappears, without moving. */
+  .fx-bubble { animation-name: fx-bubble-fade; }
+  .fx-bubble[data-hold] { animation: none; }
   /* Still reads as "…" without the loop. */
   .typing-dots i:nth-child(2) { opacity: 0.6; }
   .typing-dots i:nth-child(3) { opacity: 0.3; }

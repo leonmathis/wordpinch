@@ -10,6 +10,8 @@ import { LetterSlots } from "./kit/letter-slots";
 import { OpponentAwayBanner } from "./opponent-away";
 import { Avatar } from "./avatar";
 import { playBuzz } from "@/lib/sound";
+import { PLAYER_REACTIONS } from "@/lib/room-fx";
+import { ReactionBubble, ReactionPills } from "./reactions";
 
 /** "45" under a minute, "1:30" from 60 s. */
 function formatClock(s: number) {
@@ -178,12 +180,48 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   }, []);
 
   React.useEffect(() => {
-    if (inputRef.current) inputRef.current.focus();
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    try {
+      el.setSelectionRange(end, end);
+    } catch {
+      /* unsupported on some virtual keyboards — non-fatal */
+    }
   }, []);
+
+  // Set by `handle` when it moved letters; applied once React has written
+  // the new value (which puts the caret at the end).
+  const caretAfterRef = React.useRef<number | null>(null);
+  React.useLayoutEffect(() => {
+    const at = caretAfterRef.current;
+    const el = inputRef.current;
+    if (at === null || !el) return;
+    caretAfterRef.current = null;
+    try {
+      el.setSelectionRange(at, at);
+    } catch {
+      /* unsupported on some virtual keyboards — non-fatal */
+    }
+  }, [val]);
 
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const cleaned = e.target.value.toUpperCase().replace(NON_ALPHA_REGEX, "");
-    setVal(cleaned.startsWith(A) ? cleaned : A + cleaned);
+    let next = cleaned;
+    if (!cleaned.startsWith(A)) {
+      // Letters typed in front of the locked first letter (caret moved to
+      // the start) go right after it, and the caret follows them. Before,
+      // they stayed in front and the word came out as "TOOTHT".
+      // Only for an insertion: a deleted lock letter just comes back.
+      const lock = cleaned.length > val.length ? cleaned.indexOf(A) : -1;
+      const typedBefore = lock > 0 ? lock : 0;
+      next = lock > 0 ? A + cleaned.slice(0, lock) + cleaned.slice(lock + 1) : A + cleaned;
+      if (typedBefore > 0) caretAfterRef.current = typedBefore + 1;
+    }
+    setVal(next);
+    // F3: the opponent sees how many letters, never which.
+    ctx.fx.typing(next.length);
     if (rejectMessage) setRejectMessage(null);
   };
 
@@ -302,6 +340,8 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   }, []);
 
   const urgent = left <= 5 && !paused;
+  // The prefilled first letter alone ("1 letter") says nothing.
+  const opponentLen = ctx.mySide ? ctx.fx.lens[ctx.mySide === "host" ? "guest" : "host"] : null;
   const message = rejectMessage ?? (submitting ? "Checking your word…" : `min ${ctx.minWordLength} letters · Enter to submit`);
 
   return (
@@ -410,7 +450,8 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
         {/* Always about the OTHER player, and only what we actually know:
          *  presence, and whether their word has reached the server (it
          *  used to claim "is typing", which the app has no signal for). */}
-        <div className="flex min-w-0 items-center gap-3 rounded-full bg-card py-1.5 pr-4 pl-1.5">
+        <div className="relative flex min-w-0 items-center gap-3 rounded-full bg-card py-1.5 pr-4 pl-1.5">
+          <ReactionBubble ctx={ctx} className="-top-9 left-[34px]" hidden={!!rejectMessage} />
           <Avatar
             name={ctx.them.name}
             size={36}
@@ -426,8 +467,12 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           </span>
           {ctx.opponentSubmitted && !paused ? (
             <span className="shrink-0 text-sm font-bold text-muted-foreground">checking…</span>
+          ) : !paused && opponentLen !== null && opponentLen > 1 ? (
+            <span className="shrink-0 text-sm font-bold text-muted-foreground tabular-nums">{`${opponentLen} letters`}</span>
           ) : null}
         </div>
+
+        <ReactionPills ctx={ctx} ids={PLAYER_REACTIONS} label="Reactions" />
       </div>
     </div>
   );

@@ -10,6 +10,8 @@ import { LetterSlots } from "./kit/letter-slots";
 import { ShapeGlyph } from "./kit/shape";
 import { StatusPill } from "./kit/status-pill";
 import { RoundsTable } from "./rounds-table";
+import { CHEERS } from "@/lib/room-fx";
+import { ReactionBubble, ReactionPills } from "./reactions";
 
 /**
  * Drives a once-per-second countdown clamped to [0, total]. Initial value
@@ -149,7 +151,11 @@ function SpectatorRace({ ctx, timer }: { ctx: GameCtx; timer: boolean }) {
                   <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">
                     {!seat.online ? `${name} is offline` : seat.submitted ? `${name} submitted a word` : `${name} is in the round`}
                   </span>
-                  {seat.online && seat.submitted ? <Check aria-hidden className="size-[18px] shrink-0" strokeWidth={2.8} /> : null}
+                  {seat.online && seat.submitted ? (
+                    <Check aria-hidden className="size-[18px] shrink-0" strokeWidth={2.8} />
+                  ) : seat.online && (ctx.fx.lens[side] ?? 0) > 1 ? (
+                    <span className="shrink-0 text-sm font-bold text-muted-foreground tabular-nums">{`${ctx.fx.lens[side]} letters`}</span>
+                  ) : null}
                 </div>
               );
             })}
@@ -239,6 +245,20 @@ function SpectatorMatchEnd({ ctx }: { ctx: GameCtx }) {
   );
 }
 
+/** F3: spectators cheer the players on; the bubble shows the room's latest. */
+function Cheers({ ctx }: { ctx: GameCtx }) {
+  return (
+    <section aria-labelledby="cheer-label" className="relative mt-2 flex flex-col gap-2.5">
+      <ReactionBubble ctx={ctx} className="right-0 -top-10" />
+      <div id="cheer-label" className="text-[13px] font-bold text-muted-foreground">
+        Cheer from the sidelines
+        <span className="ml-1.5 rounded-full bg-shape-pink px-2 py-0.5 text-[11px] font-extrabold text-[#141414]">New</span>
+      </div>
+      <ReactionPills ctx={ctx} ids={CHEERS} label="Cheers" />
+    </section>
+  );
+}
+
 /**
  * Read-only view rendered for any client whose role resolves to 'spectator'.
  * The inner content switches on the active game phase so a spectator who
@@ -263,6 +283,7 @@ export function SpectatorPhase({ ctx }: { ctx: GameCtx }) {
         {ctx.phase === "race" ? <SpectatorRace ctx={ctx} timer /> : null}
         {ctx.phase === "result" ? <SpectatorResult ctx={ctx} /> : null}
         {ctx.phase === "matchend" ? <SpectatorMatchEnd ctx={ctx} /> : null}
+        <Cheers ctx={ctx} />
       </div>
     </div>
   );

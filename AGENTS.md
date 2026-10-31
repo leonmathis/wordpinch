@@ -51,6 +51,7 @@ src/
    ├─ features.ts             flags for daily / quick match / pass the phone
    ├─ identity.ts             anonymous sign-in, useIdentity / ensureIdentity / useHasAccount
    ├─ collection.ts           server: collect_word, won words on resolve, reads
+   ├─ room-fx.ts              reactions / cheers / letter count on the fx: topic
    ├─ supabase/identity.ts    server: resolveCallerId (session first, clientId fallback)
    └─ game/
       ├─ preview.ts           dev preview state (see Routes)
@@ -65,7 +66,7 @@ src/
 - `/r/[code]?phase=lobby|pick|reveal|race|result|matchend|spectator` → that phase (defaults to `lobby`)
 - `?reconnect=1` overlays the reconnect banner
 - `/collection` → the player's word collection (F2)
-- Dev only, with `?phase=`: `as=host|guest|spectator` seeds a room without network (`lib/game/preview.ts`); `guest=0` empties the guest seat, `stress=1` uses 32-character names and long words, `away=1` drops the opponent, `opp=submitted`, `settling=1`, `result=win|nearmiss|split|splittimeout|nobody|nobodytimeout|forfeit|replay`, `end=win|loss|tie`, `rounds=15`, `collected=3` (match-end banner count). The code must be 4 valid characters, e.g. `/r/K7QM`.
+- Dev only, with `?phase=`: `as=host|guest|spectator` seeds a room without network (`lib/game/preview.ts`); `guest=0` empties the guest seat, `stress=1` uses 32-character names and long words, `away=1` drops the opponent, `opp=submitted`, `settling=1`, `result=win|nearmiss|split|splittimeout|nobody|nobodytimeout|forfeit|replay`, `end=win|loss|tie`, `rounds=15`, `collected=3` (match-end banner count), `rx=close|gg|hurry|go-host|go-guest|ooh` (incoming reaction), `typed=4` (opponent's letter count). The code must be 4 valid characters, e.g. `/r/K7QM`.
 
 ## Conventions
 
@@ -77,6 +78,8 @@ src/
 - **`prefers-reduced-motion`** is honored on all entrance/scene animations.
 - **Identity (F1).** Every player has an anonymous Supabase account (session in cookies). Room routes get the caller from `resolveCallerId`, never straight from the body; a body id is only the fallback for browsers without a session and is refused when it is an account id. Nothing signs in until a room is created or opened.
 - **Collection (F2).** Writes only on the server through `collect_word` (won words in `resolveRound`, bookmarks via `POST /api/rooms/[code]/save-word`, which reads the word from the room, never the body). Reads run with the caller's session, so RLS returns their own rows. One row per player and word; a win replaces a bookmark.
+- **Reactions (F3).** Cosmetic only, on their own topic `fx:<CODE>` (migration `20261031140000`), never on `room:` (server-only broadcasts) and never in presence (Realtime allows a client 5 presence events per 30 s). Receivers accept only ids from `lib/game/reactions.ts` and a 0–50 letter count for the current round; the letters themselves are never sent. Reaction pills `preventDefault` on mousedown so the race input keeps focus (the phone keyboard stays up).
+- **Server-read constants live in plain modules.** A server component that imports a value from a `"use client"` file gets a client-reference stub, not the value (the dev preview parser silently rejected every `rx=` that way).
 - **Async params/searchParams.** In Next 16, both are Promises and must be `await Promise.all([params, searchParams])`.
 - **Ternaries, not `&&`** for conditional rendering — `&&` with a number type renders `0` as text.
 - **Space after an expression:** `{name} still waiting` loses its space when the JSX text runs on to a line break (the toolchain trims it; same line before the closing tag is fine). Use a template string (`{`${name} still waiting`}`) or `{" "}`.

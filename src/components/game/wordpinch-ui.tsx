@@ -28,6 +28,7 @@ import { PhaseShell } from "./phase-shell";
 import { SettlingPhase } from "./settling-phase";
 import { TopChrome } from "./top-chrome";
 import { useHasAccount, useIdentity } from "@/lib/identity";
+import { REACTIONS, useRoomFx } from "@/lib/room-fx";
 
 /**
  * How long the host must be missing from presence before the guest's client
@@ -323,6 +324,37 @@ export function WordpinchUI({
     [collectionEnabled, preview, previewCollected]
   );
 
+  // F3: reactions and letter counts ride their own topic (lib/room-fx.ts).
+  const roomFx = useRoomFx(channelCode, role ?? null);
+  const fxRound = round;
+  const { typing: fxTyping, react: fxReact, typed: fxTyped, incoming: fxIncoming } = roomFx;
+  // Previews have no channel: a fixed reaction and count stand in.
+  const [previewAt] = React.useState(() => Date.now());
+  const previewRx = preview?.rx ?? null;
+  const previewTyped = preview?.typed ?? null;
+  const previewOpp = role === "guest" ? "host" : "guest";
+  const fx = React.useMemo(() => {
+    if (preview) {
+      const from = previewRx && REACTIONS[previewRx].by === "spectator" ? "spectator" : previewOpp;
+      return {
+        incoming: previewRx ? { id: previewRx, from, at: previewAt } : null,
+        lens: {
+          host: previewOpp === "host" ? previewTyped : null,
+          guest: previewOpp === "guest" ? previewTyped : null,
+        },
+        react: () => {},
+        typing: () => {},
+      } as GameCtx["fx"];
+    }
+    const len = (seat: "host" | "guest") => (fxTyped[seat]?.round === fxRound ? fxTyped[seat]!.len : null);
+    return {
+      incoming: fxIncoming,
+      lens: { host: len("host"), guest: len("guest") },
+      react: fxReact,
+      typing: (n: number) => fxTyping(fxRound, n),
+    };
+  }, [preview, previewRx, previewTyped, previewOpp, previewAt, fxIncoming, fxTyped, fxRound, fxReact, fxTyping]);
+
   const ctx: GameCtx = React.useMemo(
     () => ({
       phase,
@@ -368,6 +400,7 @@ export function WordpinchUI({
       roundOutcomes,
       roomCode: roomCode ?? "",
       collection,
+      fx,
       shareOpen,
       reconnectOpen,
       openShare,
@@ -416,6 +449,7 @@ export function WordpinchUI({
       sceneKey,
       roomCode,
       collection,
+      fx,
       openShare,
       closeShare,
       actions,

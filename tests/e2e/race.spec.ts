@@ -149,6 +149,30 @@ test.describe("race", () => {
     await expect(page.getByRole("button", { name: "Submit word" })).toBeEnabled();
   });
 
+  test("typing keeps the locked first letter first", async ({ page }) => {
+    await open(page, "race", "as=host");
+    const el = input(page);
+    // Real keystrokes, not fill(): autofocus once left the caret before
+    // the "T", and typing OOTH came out as "TOOTHT".
+    await expect(el).toBeFocused();
+    await page.keyboard.type("OOTH");
+    await expect(el).toHaveValue("TOOTH");
+    // Caret moved in front of the lock letter (a tap there): the letters
+    // go after it, and the caret follows them.
+    await el.evaluate((i: HTMLInputElement) => i.setSelectionRange(0, 0));
+    await page.keyboard.type("S");
+    await expect(el).toHaveValue("TSOOTH");
+    await page.keyboard.type("A");
+    await expect(el).toHaveValue("TSAOOTH");
+    // Deleting the lock letter brings it back without moving others.
+    await el.fill("T");
+    await el.press("End");
+    await page.keyboard.type("RUTH");
+    await el.evaluate((i: HTMLInputElement) => i.setSelectionRange(0, 0));
+    await page.keyboard.press("Delete");
+    await expect(el).toHaveValue("TRUTH");
+  });
+
   test("long words step the type down and stay inside the pill", async ({ page }) => {
     await open(page, "race", "as=host");
     const size = async () => parseFloat(await input(page).evaluate((el) => getComputedStyle(el).fontSize));
