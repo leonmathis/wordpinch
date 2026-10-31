@@ -12,6 +12,17 @@ import { AnchoredWord } from "@/components/game/kit/anchored-word";
 import { LetterSlots } from "@/components/game/kit/letter-slots";
 import { Shape, ShapeGlyph } from "@/components/game/kit/shape";
 import { StatusPill } from "@/components/game/kit/status-pill";
+import { TopChrome } from "@/components/game/top-chrome";
+
+/** The real top bar in a box of its own (it is absolutely positioned). */
+function TopBarSample({ round, total, roomCode }: { round: number; total: number; roomCode?: string }) {
+  const [muted, setMuted] = React.useState(false);
+  return (
+    <div data-kit="top-bar" className="relative h-20 overflow-hidden rounded-2xl bg-shape-blue/40">
+      <TopChrome round={round} total={total} muted={muted} onToggleMute={() => setMuted((m) => !m)} roomCode={roomCode} />
+    </div>
+  );
+}
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -31,6 +42,12 @@ function Column({ label }: { label: string }) {
       <h1 className="text-2xl font-extrabold">
         Kit <span className="font-hand text-3xl font-normal">{label}</span>
       </h1>
+
+      <Section title="Top bar">
+        <TopBarSample round={0} total={7} />
+        <TopBarSample round={3} total={7} roomCode="K7QM" />
+        <TopBarSample round={15} total={15} roomCode="K7QM" />
+      </Section>
 
       <Section title="Buttons">
         <div className="flex flex-wrap items-center gap-3">

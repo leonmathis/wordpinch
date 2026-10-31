@@ -64,7 +64,8 @@ export function Avatar({ name, size = 24, className, dim = false, side }: Props)
     <span
       aria-hidden
       className={cn(
-        "inline-flex items-center justify-center rounded-full font-hand text-[#141414] shrink-0 transition-opacity",
+        // Urbanist, not Gochi Hand: at avatar size Gochi's "G" reads as a "6".
+        "inline-flex items-center justify-center rounded-full font-extrabold text-[#141414] shrink-0 transition-opacity",
         dim ? "opacity-40" : "opacity-100",
         className
       )}
@@ -72,7 +73,7 @@ export function Avatar({ name, size = 24, className, dim = false, side }: Props)
         background: color,
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.6),
+        fontSize: Math.round(size * 0.48),
         lineHeight: 1,
       }}
     >

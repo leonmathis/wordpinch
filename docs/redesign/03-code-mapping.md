@@ -94,7 +94,7 @@ Legend:
 
 | File | Design (canvas row) | Action | Notes |
 |---|---|---|---|
-| `top-chrome.tsx` | D · Menu | RW → `TopBar` + `SettingsMenu` | theme toggle, mute, share and leave move into the menu. The 2px progress bar becomes round pills. The counter moves into the label |
+| `top-chrome.tsx` | D · Menu | RW → `TopBar` + `SettingsMenu` | theme toggle, mute, share and leave move into the menu. The 2px progress bar becomes round pills. The counter moves into the label. **Done in R3:** the component keeps the name `TopChrome` and its absolute slot (so `.wp-body` spacing is unchanged). The inline score stays in `ScoreHud` until R6–R8, to avoid showing it twice. `.wp-banners` starts at 66px because the 44px gear ends at 58px. The popover comes from `npx shadcn add popover`; the CLI wrongly imported `cn` from an npm package of that name and installed it, which was reverted to `@/lib/utils` |
 | `score-hud.tsx` | race/pick top bar | RW | inline score moves into `TopBar`; "Words played" becomes a pill (phone) / card (desktop) |
 | `letters-display.tsx` | everywhere | replace with `LetterSlots` | delete once unused |
 | `landing.tsx` | Step 2 · Landing | RW | mode grid of 4 `Shape` buttons + join row. **Name input removed** (lobby already has `NameEditor`, `lobby.tsx:182-206`, and the "add your name" hint, `lobby.tsx:363-368`). Create errors move under the grid. Daily, Quick and Pass shapes stay behind a feature flag until their F-PR ships |
@@ -111,7 +111,7 @@ Legend:
 | `reconnect-banner.tsx` | Step 2 · Overlays | R → `StatusPill` | **fix**: spinner has no reduced-motion guard (`:59`) |
 | `share-dialog.tsx` | Step 2 · Overlays | R | `Dialog variant=sheet`; QR in a yellow card; copy → check state |
 | `qr.tsx` | Step 2 · Overlays | keep | stays black on white for scanning |
-| `avatar.tsx` | everywhere | R | pastel seat colours |
+| `avatar.tsx` | everywhere | R | pastel seat colours. Initials in bold Urbanist, not Gochi Hand: at avatar size Gochi's "G" reads as "6" (seen on the race screen in R3) |
 | `count-up.tsx`, `phase-shell.tsx` | none | keep | phase-shell keeps the transition timing |
 | `wordpinch-ui.tsx` | none | small | `data-phase` on `.wp-root`; `TopBar` instead of `TopChrome`; no logic changes |
 | `globals.css` component classes | none | delete as each screen migrates | grep for each class before deleting; `.used-row` subgrid needs multi-row verification (AGENTS.md) |

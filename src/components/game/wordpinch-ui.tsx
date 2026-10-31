@@ -374,10 +374,6 @@ export function WordpinchUI({
   );
 
   const showShare = shareOpen && phase !== "landing";
-  // Hidden in the lobby, which carries its own labelled "Share link" button
-  // — two identical share icons a few pixels apart read as a bug, not a
-  // choice.
-  const showChromeShare = phase !== "landing" && phase !== "lobby";
   // Picks the phase background in globals.css. Settling reads as part of
   // the race, so it keeps the race colour.
   const backgroundPhase = isSettling ? "race" : phase;
@@ -396,18 +392,16 @@ export function WordpinchUI({
         </div>
       ) : null}
 
-      {/* Persistent across phase transitions so the progress bar + theme/
-       *  mute/share icons don't flicker out during the AnimatePresence
-       *  exit-then-enter window. Visibility props are derived from the
-       *  current phase + role. */}
+      {/* Persistent across phase transitions so the round pills and the
+       *  settings gear don't flicker out during the AnimatePresence
+       *  exit-then-enter window. */}
       <TopChrome
         round={ctx.round}
         total={ctx.total}
         muted={ctx.muted}
         onToggleMute={ctx.toggleMute}
         onShare={ctx.openShare}
-        showShare={showChromeShare}
-        showLeave={!!roomCode && phase !== "landing"}
+        roomCode={roomCode && phase !== "landing" ? ctx.roomCode : undefined}
       />
 
       {/* Spectator routing: any client whose role resolved to 'spectator'

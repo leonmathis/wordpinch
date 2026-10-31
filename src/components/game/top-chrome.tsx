@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTheme } from "next-themes";
-import { Sun, Moon, Volume2, VolumeX, Share2, LogOut } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { SettingsMenu } from "./settings-menu";
 
 type Props = {
   round?: number;
@@ -12,101 +9,51 @@ type Props = {
   muted: boolean;
   onToggleMute: () => void;
   onShare?: () => void;
-  showShare?: boolean;
-  /**
-   * Shows the "leave room" exit. True for every in-room view (including
-   * spectators) so no phase is ever a dead end — the room lives on the
-   * server, so leaving is non-destructive and the URL still works.
-   */
-  showLeave?: boolean;
+  /** Room code when in a room; the menu then offers share and leave. */
+  roomCode?: string;
 };
 
-// 36px visually, 44px to the finger: `icon-xs` (24px) was well under the
-// comfortable touch minimum, and these are the only persistent controls on
-// mobile. The `after` pseudo-element extends the hit area without inflating
-// the icons; `.wp-icons` spaces them so the areas don't overlap.
-const ICON_BUTTON =
-  "size-9 text-muted-foreground relative after:absolute after:-inset-1 after:content-['']";
+/** Pill width so up to 15 rounds fit in ~180px next to the gear. */
+function pillWidth(total: number) {
+  return Math.max(8, Math.min(22, Math.floor((180 - (total - 1) * 4) / total)));
+}
 
-export function TopChrome({
-  round = 0,
-  total,
-  muted,
-  onToggleMute,
-  onShare,
-  showShare = true,
-  showLeave = false,
-}: Props) {
-  const { resolvedTheme, setTheme } = useTheme();
-  const pct = total > 0 ? (round / total) * 100 : 0;
+/**
+ * Pastel Pop top bar: round label and progress pills on the left (the
+ * wordmark outside a match), one settings gear on the right. Theme, sound,
+ * share and leave live in the gear's menu.
+ */
+export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, roomCode }: Props) {
+  const inMatch = round > 0 && total > 0;
+  const width = inMatch ? pillWidth(total) : 0;
 
   return (
-    <>
-      <div className="wp-progress" style={{ width: `${pct}%` }} />
-      <div className="wp-chrome">
-        {/* The wordmark is the conventional "go home" affordance — it used to
-         *  be an inert <div>, which left in-room players with no way back. */}
+    <div className="wp-chrome items-center">
+      {inMatch ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="text-[13px] font-bold">
+            Round {round} of {total}
+          </div>
+          <div className="flex gap-1" aria-hidden>
+            {Array.from({ length: total }, (_, i) => (
+              <span
+                key={i}
+                className="h-1.5 rounded-full bg-foreground"
+                style={{ width, opacity: i < round - 1 ? 1 : i === round - 1 ? 0.45 : 0.15 }}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        // The wordmark is the conventional "go home" affordance.
         <Link
           href="/"
-          className="wp-brand rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="rounded-sm text-xl font-extrabold tracking-[-0.01em] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           wordpinch
         </Link>
-        <div className="wp-chrome-right">
-          {round > 0 ? <div className="wp-counter">{round}/{total}</div> : null}
-          <div className="wp-icons">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Toggle theme"
-              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className={ICON_BUTTON}
-            >
-              <Sun strokeWidth={1.7} className="size-[15px] hidden dark:block" />
-              <Moon strokeWidth={1.7} className="size-[15px] block dark:hidden" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={muted ? "Unmute sound" : "Mute sound"}
-              onClick={onToggleMute}
-              className={ICON_BUTTON}
-            >
-              {muted ? (
-                <VolumeX strokeWidth={1.7} className="size-[15px]" />
-              ) : (
-                <Volume2 strokeWidth={1.7} className="size-[15px]" />
-              )}
-            </Button>
-            {showShare ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Share room"
-                onClick={onShare}
-                className={ICON_BUTTON}
-              >
-                <Share2 strokeWidth={1.7} className="size-[15px]" />
-              </Button>
-            ) : null}
-            {showLeave ? (
-              // A real <a>, not a Button with a link inside it: base-ui's
-              // Button expects a native <button> element and logs a
-              // semantics warning otherwise.
-              <Link
-                href="/"
-                aria-label="Leave room"
-                className={cn(
-                  buttonVariants({ variant: "ghost", size: "icon" }),
-                  ICON_BUTTON
-                )}
-              >
-                <LogOut strokeWidth={1.7} className="size-[15px]" />
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </>
+      )}
+      <SettingsMenu roomCode={roomCode} onShare={onShare} muted={muted} onToggleMute={onToggleMute} />
+    </div>
   );
 }

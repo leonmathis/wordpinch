@@ -307,10 +307,8 @@
    * being covered. */
   .wp-banners {
     @apply relative z-[4] flex flex-col items-center gap-2 shrink-0;
-    padding: 56px 16px 0;
-  }
-  @media (min-width: 640px) {
-    .wp-banners { padding-top: 48px; }
+    /* Top bar: 14px padding + 44px gear = 58px; 8px gap below it. */
+    padding: 66px 16px 0;
   }
 
   .wp-body {

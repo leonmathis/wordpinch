@@ -50,7 +50,7 @@ export function StatusPill({
       >
         {icon}
       </span>
-      <span className="min-w-0 flex-1">{children}</span>
+      <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{children}</span>
       {action}
     </div>
   );

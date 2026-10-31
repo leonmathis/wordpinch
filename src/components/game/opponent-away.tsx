@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { TriangleAlert } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Pause } from "lucide-react";
 import type { GameCtx } from "@/lib/game/types";
+import { StatusPill } from "./kit/status-pill";
 
 /**
  * Grace period (ms) after the opponent drops out of presence before the
@@ -99,18 +99,15 @@ export function OpponentAwayBanner({ ctx }: { ctx: GameCtx }) {
   }, []);
 
   return (
-    <Alert variant="destructive" className="mb-4">
-      <TriangleAlert />
-      <AlertDescription className="font-mono text-[13px]">
-        {secondsLeft > 0 ? (
-          <>
-            {ctx.them.name} disconnected · forfeits in{" "}
-            <span className="tabular-nums">{secondsLeft}s</span>
-          </>
-        ) : (
-          <>{ctx.them.name} is still away · ending the round…</>
-        )}
-      </AlertDescription>
-    </Alert>
+    <StatusPill tone="attention" icon={<Pause fill="currentColor" />} className="mb-4">
+      {secondsLeft > 0 ? (
+        <>
+          {ctx.them.name} disconnected. They forfeit in{" "}
+          <span className="tabular-nums">{secondsLeft}&nbsp;s</span>.
+        </>
+      ) : (
+        <>{ctx.them.name} is still away. Ending the round…</>
+      )}
+    </StatusPill>
   );
 }
