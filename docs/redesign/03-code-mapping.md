@@ -178,6 +178,7 @@ R5–R9 only depend on R2 and touch separate files, so they can run in parallel.
 
 ## 8. Open points for the implementation start
 
+00. **Hosted migrations pending:** `20261031130000_collected_words.sql` (F2) is not on wordpinch-dev yet; run `npx supabase db push --linked`, then turn on anonymous sign-ins (0a). Without the push, won words are skipped with a logged error and the collection stays empty; the game itself is unaffected.
 0a. **Anonymous sign-ins on the hosted project (from F1):** off until switched on under Authentication → Sign In / Providers → "Allow anonymous sign-ins". Until then every browser plays on its clientId, as before. Consider a CAPTCHA (Supabase recommends one for anonymous sign-ins) and a periodic delete of old anonymous users without seats.
 0b. **Migrations don't replay on a fresh database (found in F1):** `20260517075653_harden_functions.sql` revokes grants on `public.rls_auto_enable()`, which only exists on the hosted project, so `supabase start` / `db reset` stops there. Fix with a guarded revoke (`if exists`) when convenient.
 0. **Spectator pick status (from R10):** showing "Locked" / "Picking" per player needs `sanitize.ts` to expose lock booleans (not letters). That also tells players whether the opponent has locked. Decide before F3.
