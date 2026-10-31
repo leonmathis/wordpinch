@@ -69,7 +69,14 @@ export function WordpinchUI({
   // result view (with their near-miss attempt) the first time the result
   // screen appears — not a brief "you lost" before the near-miss
   // broadcast/response lands.
-  const [submitInFlight, setSubmitInFlight] = React.useState(false);
+  const [submitInFlight, setSubmitInFlightRaw] = React.useState(false);
+  // The word behind the settling screen's "You played …", kept from the
+  // submit until the server's pendingResult carries it.
+  const [submittedWord, setSubmittedWord] = React.useState<string | null>(null);
+  const setSubmitInFlight = React.useCallback((b: boolean, word?: string) => {
+    setSubmitInFlightRaw(b);
+    if (word) setSubmittedWord(word);
+  }, []);
 
   // Resolve role (host / guest / spectator) before anything else. While
   // resolving, treat the caller as "not the host" so we don't briefly show
@@ -192,6 +199,10 @@ export function WordpinchUI({
     : false;
   const isSettling =
     submitInFlight || (myAttemptInPending && phase === "race");
+  const settlingWord =
+    (myRoleForSettling
+      ? liveState?.pendingResult?.attempts.find((a) => a.by === myRoleForSettling)?.word
+      : undefined) ?? submittedWord ?? undefined;
 
   // On the landing page (no roomCode, phase === 'landing') there's no
   // active match, so the round counter should be 0 — not the MOCK
@@ -378,6 +389,7 @@ export function WordpinchUI({
       openShare,
       closeShare,
       actions,
+      setSubmitInFlight,
     ]
   );
 
@@ -411,8 +423,12 @@ export function WordpinchUI({
         onShare={ctx.openShare}
         roomCode={roomCode && phase !== "landing" ? ctx.roomCode : undefined}
         // Phases already on the redesign carry the score in the top bar;
-        // the rest still show ScoreHud until their round (R7, R8).
-        score={phase === "pick" && role !== "spectator" ? { you: ctx.you, them: ctx.them } : undefined}
+        // the rest still show ScoreHud until their round (R8).
+        score={
+          (phase === "pick" || phase === "reveal" || phase === "race") && role !== "spectator"
+            ? { you: ctx.you, them: ctx.them }
+            : undefined
+        }
       />
 
       {/* Spectator routing: any client whose role resolved to 'spectator'
@@ -436,7 +452,7 @@ export function WordpinchUI({
           // it fades in cleanly on submit and fades out into the
           // result phase once the round resolves.
           <PhaseShell key={`settling-${round}`}>
-            <SettlingPhase />
+            <SettlingPhase word={settlingWord} />
           </PhaseShell>
         ) : phase === "landing" ? (
           <PhaseShell key="landing">

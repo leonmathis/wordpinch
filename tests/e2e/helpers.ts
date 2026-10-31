@@ -187,3 +187,21 @@ export async function findLowContrast(page: Page, root = "body") {
     return out;
   }, root);
 }
+
+/**
+ * Waits for running one-shot animations (entrance fades, pops) to end, so
+ * contrast and screenshots see the settled frame: `findLowContrast` skips
+ * anything with opacity < 1, which a mid-fade element is. Infinite loops
+ * (dots, bobbing) are ignored.
+ */
+export async function finishAnimations(page: Page) {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => {}))
+    )
+  );
+}
+

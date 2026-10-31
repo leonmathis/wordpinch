@@ -147,7 +147,7 @@ export type GameCtx = {
    * has flipped to `result`. This avoids the "you lost" flash on the
    * loser's screen before their near-miss attempt is appended — the
    * result phase only mounts once the submitter knows their final
-   * outcome.
+   * outcome. `word` is shown on the settling screen ("You played …").
    */
-  setSubmitInFlight: (b: boolean) => void;
+  setSubmitInFlight: (b: boolean, word?: string) => void;
 };
