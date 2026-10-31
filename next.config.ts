@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
     "/api/daily/start": ["./src/lib/words/data/**"],
     "/api/daily/submit": ["./src/lib/words/data/**"],
     "/api/daily/card": ["./src/lib/words/data/**"],
+    // F8 draws each round's letters from it.
+    "/api/words/pair": ["./src/lib/words/data/**"],
   },
 };
 

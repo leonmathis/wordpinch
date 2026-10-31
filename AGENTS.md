@@ -10,7 +10,7 @@ A real-time 2-player word game. Pick a letter, race to type a word that starts/e
 
 ## Current state
 
-Static design implementation — phase 2 of 10. All 8 game phases are built as React components backed by mock data. No realtime, no Supabase, no word validation yet.
+The Pastel Pop redesign (R1–R10) and its new features (F1–F8) are built: anonymous accounts, word collection, reactions, no-repeat and peek, share images, daily pinch, quick match and pass the phone, over Supabase (Postgres, Realtime broadcast + presence) with server-authoritative rooms. Open items for the hosted project are listed in `docs/redesign/03-code-mapping.md` §8.
 
 ## Stack
 
@@ -35,6 +35,7 @@ src/
 │  ├─ collection/page.tsx     "Your words" page (F2)
 │  ├─ daily/page.tsx          daily pinch (F6); api/daily/{,start,submit,card}
 │  ├─ quick/page.tsx          quick match (F7); api/quick (GET/POST/DELETE)
+│  ├─ pass/page.tsx           pass the phone (F8), local; api/words/pair
 │  ├─ r/[code]/opengraph-image.tsx  link preview: result or invite card (F5)
 │  ├─ r/[code]/card/route.tsx       the same card 1080×1350 (?download=1 saves)
 │  ├─ globals.css             tokens, phase backgrounds, animations, shell classes
@@ -77,6 +78,7 @@ src/
 - `/collection` → the player's word collection (F2)
 - `/daily` → the daily pinch (F6)
 - `/quick` → quick match (F7)
+- `/pass` → pass the phone (F8)
 - Dev only, with `?phase=`: `as=host|guest|spectator` seeds a room without network (`lib/game/preview.ts`); `guest=0` empties the guest seat, `stress=1` uses 32-character names and long words, `away=1` drops the opponent, `opp=submitted`, `settling=1`, `result=win|nearmiss|split|splittimeout|nobody|nobodytimeout|forfeit|replay`, `end=win|loss|tie`, `rounds=15`, `collected=3` (match-end banner count), `rx=close|gg|hurry|go-host|go-guest|ooh` (incoming reaction), `typed=4` (opponent's letter count), `norepeat=1` (G E P K used), `peek=1|used`. The code must be 4 valid characters, e.g. `/r/K7QM`.
 
 ## Conventions

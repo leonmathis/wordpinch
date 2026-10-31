@@ -253,11 +253,24 @@ export async function flowerClearance(page: Page, root = "body") {
         if (!n.textContent!.trim()) continue;
         const rg = document.createRange();
         rg.selectNodeContents(n);
-        for (const r of Array.from(rg.getClientRects()))
+        // A truncated label's text runs on past its box; only what shows
+        // counts, so clip to every overflow-hidden box up to the shape.
+        let clipL = -Infinity, clipR = Infinity;
+        for (let el = n.parentElement; el && el !== shape; el = el.parentElement) {
+          if (getComputedStyle(el).overflowX !== "visible") {
+            const b = el.getBoundingClientRect();
+            clipL = Math.max(clipL, b.left);
+            clipR = Math.min(clipR, b.right);
+          }
+        }
+        for (const raw of Array.from(rg.getClientRects())) {
+          const r = { left: Math.max(raw.left, clipL), right: Math.min(raw.right, clipR), top: raw.top, bottom: raw.bottom, height: raw.height };
+          if (r.right <= r.left) continue;
           for (const [px, py] of [[r.left, r.top + r.height * 0.12], [r.right, r.top + r.height * 0.12], [r.left, r.bottom - r.height * 0.12], [r.right, r.bottom - r.height * 0.12]]) {
             const ux = (px - cx) / k + 100, uy = (py - cy) / k + 100;
             for (const [bx, by] of edge) min = Math.min(min, Math.hypot(ux - bx, uy - by) * k);
           }
+        }
       }
       if (min !== Infinity) out.push(min);
     }

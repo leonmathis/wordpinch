@@ -101,6 +101,7 @@
   --phase-lobby: #f5d565;
   --phase-pick: #f4b6d5;
   --phase-reveal: #b8cdee;
+  --phase-pass: #c8d5a2;
   --phase-race: #f5f0e3;
   --phase-result: #dce4c3;
   --phase-matchend: #b8cdee;
@@ -151,6 +152,7 @@
   --phase-lobby: #1b1915;
   --phase-pick: #1b1915;
   --phase-reveal: #1b1915;
+  --phase-pass: #1b1915;
   --phase-race: #1b1915;
   --phase-result: #1b1915;
   --phase-matchend: #1b1915;
@@ -267,6 +269,8 @@
   .wp-root[data-phase="matchend"] { --wp-phase-bg: var(--phase-matchend); }
   /* F6: the daily pinch shares the pick screen's pink. */
   .wp-root[data-phase="daily"] { --wp-phase-bg: var(--phase-pick); }
+  /* F8: pass the phone, light sage (#C8D5A2 in the artboard). */
+  .wp-root[data-phase="pass"] { --wp-phase-bg: var(--phase-pass); }
   /* F7: quick match waits on the reveal's blue. */
   .wp-root[data-phase="quick"] { --wp-phase-bg: var(--phase-reveal); --quick-ring: #3e4a5e; }
   .dark .wp-root[data-phase="quick"] { --quick-ring: #4a443c; }

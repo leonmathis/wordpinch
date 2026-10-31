@@ -141,7 +141,16 @@ export function Landing() {
         ]
       : []),
     ...(FEATURES.passThePhone
-      ? [{ id: "pass", kind: "flower" as const, fill: "var(--shape-sage)", title: "Pass the\nphone", sub: "one device" }]
+      ? [
+          {
+            id: "pass",
+            kind: "flower" as const,
+            fill: "var(--shape-sage)",
+            title: "Pass the\nphone",
+            sub: "one device",
+            onSelect: () => router.push("/pass"),
+          },
+        ]
       : []),
   ];
 

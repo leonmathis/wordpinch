@@ -9,5 +9,5 @@ export const FEATURES = {
   /** F7: matchmaking queue with fixed 5 × 30 s rules. */
   quickMatch: true,
   /** F8: local two-player mode on one device. */
-  passThePhone: false,
+  passThePhone: true,
 } as const;
