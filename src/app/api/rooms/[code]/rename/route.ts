@@ -1,9 +1,8 @@
 import { NextResponse, after } from "next/server";
 import { isValidCode, renamePlayer } from "@/lib/rooms";
 import { broadcastRoomState } from "@/lib/realtime-server";
+import { resolveCallerId } from "@/lib/supabase/identity";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -31,11 +30,9 @@ export async function POST(request: Request, { params }: Params) {
       ? (body as { clientId?: unknown; name?: unknown })
       : ({} as Record<string, unknown>);
 
-  if (typeof clientId !== "string" || !UUID_REGEX.test(clientId)) {
-    return NextResponse.json(
-      { error: "clientId must be a UUID v4 string" },
-      { status: 400 }
-    );
+  const callerId = await resolveCallerId(clientId);
+  if (!callerId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
   if (typeof name !== "string" || name.trim().length === 0 || name.length > 32) {
     return NextResponse.json(
@@ -45,7 +42,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
-    const result = await renamePlayer({ code, clientId, name });
+    const result = await renamePlayer({ code, clientId: callerId, name });
     if (!result.ok) {
       const status = result.reason === "not_found" ? 404 : 403;
       return NextResponse.json({ error: result.reason }, { status });

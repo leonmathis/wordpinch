@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createRoom } from "@/lib/rooms";
+import { resolveCallerId } from "@/lib/supabase/identity";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -21,11 +20,9 @@ export async function POST(request: Request) {
       ? (body as { hostName: unknown }).hostName
       : undefined;
 
-  if (typeof hostId !== "string" || !UUID_REGEX.test(hostId)) {
-    return NextResponse.json(
-      { error: "hostId must be a UUID v4 string" },
-      { status: 400 }
-    );
+  const callerId = await resolveCallerId(hostId);
+  if (!callerId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
   const safeName =
     typeof hostName === "string" && hostName.length > 0 && hostName.length <= 32
@@ -33,7 +30,7 @@ export async function POST(request: Request) {
       : undefined;
 
   try {
-    const { code } = await createRoom({ hostId, hostName: safeName });
+    const { code } = await createRoom({ hostId: callerId, hostName: safeName });
     return NextResponse.json(
       { code },
       { status: 201, headers: { "Cache-Control": "no-store" } }

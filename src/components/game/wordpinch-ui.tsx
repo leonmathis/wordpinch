@@ -9,7 +9,6 @@ import type { UsedWord } from "@/lib/game/types";
 import { useRoomActions } from "@/lib/game/actions";
 import {
   useStoredBool,
-  useClientId,
   useStoredString,
   useSustained,
 } from "@/lib/hooks";
@@ -28,6 +27,7 @@ import { ReconnectBanner, RoleErrorBanner } from "./reconnect-banner";
 import { PhaseShell } from "./phase-shell";
 import { SettlingPhase } from "./settling-phase";
 import { TopChrome } from "./top-chrome";
+import { useIdentity } from "@/lib/identity";
 
 /**
  * How long the host must be missing from presence before the guest's client
@@ -58,7 +58,8 @@ export function WordpinchUI({
   showReconnect = false,
   preview,
 }: Props) {
-  const clientId = useClientId();
+  // Signs in only for a real room; landing and dev previews make no account.
+  const clientId = useIdentity(!!roomCode && !preview);
   const [storedName] = useStoredString("name");
   const [muted, setMutedStored] = useStoredBool("muted");
   const [shareOpen, setShareOpen] = React.useState(false);

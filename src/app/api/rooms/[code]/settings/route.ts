@@ -2,9 +2,8 @@ import { NextResponse, after } from "next/server";
 import { isValidCode, updateRoomSettings } from "@/lib/rooms";
 import { settingsPatchSchema } from "@/lib/game/state-schema";
 import { broadcastRoomState } from "@/lib/realtime-server";
+import { resolveCallerId } from "@/lib/supabase/identity";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -38,11 +37,9 @@ export async function POST(request: Request, { params }: Params) {
       ? (body as { hostId?: unknown; patch?: unknown })
       : ({} as { hostId?: unknown; patch?: unknown });
 
-  if (typeof hostId !== "string" || !UUID_REGEX.test(hostId)) {
-    return NextResponse.json(
-      { error: "hostId must be a UUID v4 string" },
-      { status: 400 }
-    );
+  const callerId = await resolveCallerId(hostId);
+  if (!callerId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
   const parsed = settingsPatchSchema.safeParse(patch);
@@ -67,7 +64,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
-    const result = await updateRoomSettings({ code, hostId, patch: cleanPatch });
+    const result = await updateRoomSettings({ code, hostId: callerId, patch: cleanPatch });
     if (!result.ok) {
       const status =
         result.reason === "not_found"

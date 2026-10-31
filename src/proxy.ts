@@ -48,6 +48,13 @@ const LIMITS: LimitRule[] = [
     windowMs: MINUTE,
   },
   {
+    // Once per browser after its anonymous sign-in.
+    scope: "identity",
+    match: (p, m) => m === "POST" && p.startsWith("/api/identity/"),
+    limit: 30,
+    windowMs: MINUTE,
+  },
+  {
     scope: "room-mutations",
     match: (p, m) => m === "POST" && p.startsWith("/api/rooms/"),
     limit: 180,

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRoomByCode, isValidCode } from "@/lib/rooms";
+import { resolveCallerId } from "@/lib/supabase/identity";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -11,12 +10,13 @@ type Params = { params: Promise<{ code: string }> };
  * UUIDs. Used by the client on room mount to decide whether to call
  * /join (unclaimed slot) and which credential to send for mutations.
  *
- * Body: { clientId: string }
+ * Caller: the session's account id, or the legacy `clientId` in the body
+ * when the browser has no session (`resolveCallerId`).
  * Response:
  *   { role: 'host' | 'guest' | 'guest_unclaimed' | 'spectator' }
  *
- * - host:           caller's clientId matches rooms.host_id
- * - guest:          caller's clientId matches rooms.guest_id
+ * - host:           caller's id matches rooms.host_id
+ * - guest:          caller's id matches rooms.guest_id
  * - guest_unclaimed: nobody owns the guest slot yet; caller should POST /join
  * - spectator:      guest slot is held by someone else
  */
@@ -40,11 +40,9 @@ export async function POST(request: Request, { params }: Params) {
       ? (body as { clientId: unknown }).clientId
       : null;
 
-  if (typeof clientId !== "string" || !UUID_REGEX.test(clientId)) {
-    return NextResponse.json(
-      { error: "clientId must be a UUID" },
-      { status: 400 }
-    );
+  const callerId = await resolveCallerId(clientId);
+  if (!callerId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
   try {
@@ -53,9 +51,9 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
     const role: "host" | "guest" | "guest_unclaimed" | "spectator" =
-      room.host_id === clientId
+      room.host_id === callerId
         ? "host"
-        : room.guest_id === clientId
+        : room.guest_id === callerId
         ? "guest"
         : room.guest_id === null
         ? "guest_unclaimed"

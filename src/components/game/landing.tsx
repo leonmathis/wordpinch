@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
-import { useClientId, useIsMounted, useStoredString } from "@/lib/hooks";
+import { useIsMounted, useStoredString } from "@/lib/hooks";
+import { ensureIdentity } from "@/lib/identity";
 import { FEATURES } from "@/lib/features";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,6 @@ function formatRetryAfter(seconds: number | null): string {
 
 export function Landing() {
   const router = useRouter();
-  const clientId = useClientId();
   const isMounted = useIsMounted();
   // The name is asked for in the lobby now; a name stored from an earlier
   // visit still goes along when creating a room.
@@ -49,7 +49,7 @@ export function Landing() {
   // warning. (base-ui's <Button> seems to render disabled={true} differently
   // SSR vs client, which we'd otherwise trip over.)
   const joinDisabled = isMounted && code.length !== 4;
-  const createDisabled = isMounted && (!clientId || creating);
+  const createDisabled = isMounted && creating;
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,16 +62,18 @@ export function Landing() {
   };
 
   const handleCreate = async () => {
-    if (!clientId || creating) return;
+    if (creating) return;
     setCreating(true);
     setCreateError(null);
     const trimmedName = name.trim().slice(0, 32);
     try {
+      // The first room is where a visitor gets their anonymous account.
+      const hostId = await ensureIdentity();
       const res = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          hostId: clientId,
+          hostId: hostId || undefined,
           hostName: trimmedName || undefined,
         }),
       });

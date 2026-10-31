@@ -1,9 +1,8 @@
 import { NextResponse, after } from "next/server";
 import { isValidCode, lockPlayerLetter } from "@/lib/rooms";
 import { broadcastRoomState } from "@/lib/realtime-server";
+import { resolveCallerId } from "@/lib/supabase/identity";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LETTER_REGEX = /^[A-Za-z]$/;
 
 type Params = { params: Promise<{ code: string }> };
@@ -34,11 +33,9 @@ export async function POST(request: Request, { params }: Params) {
       ? (body as { clientId?: unknown; letter?: unknown })
       : ({} as { clientId?: unknown; letter?: unknown });
 
-  if (typeof clientId !== "string" || !UUID_REGEX.test(clientId)) {
-    return NextResponse.json(
-      { error: "clientId must be a UUID v4 string" },
-      { status: 400 }
-    );
+  const callerId = await resolveCallerId(clientId);
+  if (!callerId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
   if (typeof letter !== "string" || !LETTER_REGEX.test(letter)) {
     return NextResponse.json(
@@ -48,7 +45,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
-    const result = await lockPlayerLetter({ code, clientId, letter });
+    const result = await lockPlayerLetter({ code, clientId: callerId, letter });
     if (!result.ok) {
       const status =
         result.reason === "not_found"

@@ -30,6 +30,7 @@ src/
 │  ├─ not-found.tsx           Pastel Pop 404 (shared with r/[code]/not-found.tsx)
 │  ├─ dev/kit/                dev-only kit showcase (404 in production)
 │  ├─ page.tsx                renders Landing via WordpinchUI
+│  ├─ api/identity/adopt/     moves a pre-F1 clientId's seats onto the account
 │  ├─ globals.css             tokens, phase backgrounds, animations, shell classes
 │  └─ r/[code]/page.tsx       Promise.all on params/searchParams → WordpinchUI
 ├─ components/
@@ -46,6 +47,8 @@ src/
    ├─ utils.ts                cn() — clsx + tailwind-merge
    ├─ hooks.ts                useStoredBool (useSyncExternalStore)
    ├─ features.ts             flags for daily / quick match / pass the phone
+   ├─ identity.ts             anonymous sign-in, useIdentity / ensureIdentity
+   ├─ supabase/identity.ts    server: resolveCallerId (session first, clientId fallback)
    └─ game/
       ├─ preview.ts           dev preview state (see Routes)
       ├─ awards.ts            match-end fastest / longest
@@ -68,6 +71,7 @@ src/
 - **Phase reset** via `key={sceneKey}` remount — never `setState` in a `useEffect` body (React 19 will lint it).
 - **Persisted state** via `useStoredBool` (`useSyncExternalStore` + cross-tab `storage` events). Keys are namespaced `wordpinch:v1:…`.
 - **`prefers-reduced-motion`** is honored on all entrance/scene animations.
+- **Identity (F1).** Every player has an anonymous Supabase account (session in cookies). Room routes get the caller from `resolveCallerId`, never straight from the body; a body id is only the fallback for browsers without a session and is refused when it is an account id. Nothing signs in until a room is created or opened.
 - **Async params/searchParams.** In Next 16, both are Promises and must be `await Promise.all([params, searchParams])`.
 - **Ternaries, not `&&`** for conditional rendering — `&&` with a number type renders `0` as text.
 - **Space after an expression:** `{name} still waiting` loses its space when the JSX text runs on to a line break (the toolchain trims it; same line before the closing tag is fine). Use a template string (`{`${name} still waiting`}`) or `{" "}`.

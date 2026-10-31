@@ -2,9 +2,8 @@ import { NextResponse, after } from "next/server";
 import { isValidCode, updateRoomState } from "@/lib/rooms";
 import { persistedGameStateSchema } from "@/lib/game/state-schema";
 import { broadcastRoomState } from "@/lib/realtime-server";
+import { resolveCallerId } from "@/lib/supabase/identity";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Params = { params: Promise<{ code: string }> };
 
@@ -37,11 +36,9 @@ export async function POST(request: Request, { params }: Params) {
   };
   const actor = typeof actorId === "string" ? actorId : hostId;
 
-  if (typeof actor !== "string" || !UUID_REGEX.test(actor)) {
-    return NextResponse.json(
-      { error: "actorId must be a UUID v4 string" },
-      { status: 400 }
-    );
+  const callerId = await resolveCallerId(actor);
+  if (!callerId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
   // Strict schema validation: a malformed state payload would otherwise
   // overwrite the row's jsonb and wedge the room into a shape the client
@@ -63,7 +60,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const ok = await updateRoomState({
       code,
-      actorId: actor,
+      actorId: callerId,
       state: validated,
     });
     if (!ok) {
