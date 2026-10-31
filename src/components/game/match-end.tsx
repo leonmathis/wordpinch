@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowRight, MoveHorizontal, Zap } from "lucide-react";
+import dynamic from "next/dynamic";
+import { ArrowRight, MoveHorizontal, Share2, Zap } from "lucide-react";
 import type { GameCtx } from "@/lib/game/types";
 import { matchAwards, type Award } from "@/lib/game/awards";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,11 @@ import { Shape } from "./kit/shape";
 import { RoundsTable } from "./rounds-table";
 import { playChime } from "@/lib/sound";
 import confetti from "canvas-confetti";
+
+const ShareResultDialog = dynamic(
+  () => import("./share-result-dialog").then((m) => ({ default: m.ShareResultDialog })),
+  { ssr: false }
+);
 
 const SCORE_SHORT = 0.33;
 const SCORE_LONG = 0.24;
@@ -86,6 +92,7 @@ function CollectionBanner({ count }: { count: number }) {
 
 export function MatchEnd({ ctx }: { ctx: GameCtx }) {
   const newWords = useNewWords(ctx);
+  const [sharing, setSharing] = React.useState(false);
   const youWon = ctx.you.score > ctx.them.score;
   const tied = ctx.you.score === ctx.them.score;
   const awards = matchAwards(ctx.used);
@@ -202,11 +209,35 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
           </div>
 
           <div className="flex flex-col gap-1 lg:self-start lg:[grid-area:cta]">
-            {primary}
+            {/* Share (white) beside the primary, as in the artboard; it
+             *  needs a real room, so previews leave it out. */}
+            {ctx.collection.preview || !ctx.roomCode ? (
+              primary
+            ) : (
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5">
+                <Button variant="pill-soft" size="pill-lg" className="h-auto min-h-14 px-5" onClick={() => setSharing(true)}>
+                  <Share2 aria-hidden />
+                  Share
+                </Button>
+                {primary}
+              </div>
+            )}
             <LeaveLink />
           </div>
         </div>
       </div>
+      {sharing ? (
+        <ShareResultDialog
+          open={sharing}
+          onOpenChange={setSharing}
+          roomCode={ctx.roomCode}
+          alt={
+            tied
+              ? `Share card: ${ctx.hostName} and ${ctx.guestName} tied ${ctx.you.score} to ${ctx.them.score}`
+              : `Share card: ${youWon ? ctx.you.name : ctx.them.name} beat ${youWon ? ctx.them.name : ctx.you.name} ${Math.max(ctx.you.score, ctx.them.score)} to ${Math.min(ctx.you.score, ctx.them.score)}`
+          }
+        />
+      ) : null}
     </div>
   );
 }

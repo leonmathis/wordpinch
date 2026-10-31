@@ -33,6 +33,8 @@ src/
 │  ├─ api/identity/adopt/     moves a pre-F1 clientId's seats onto the account
 │  ├─ api/collection/         the caller's word collection (RLS, own rows)
 │  ├─ collection/page.tsx     "Your words" page (F2)
+│  ├─ r/[code]/opengraph-image.tsx  link preview: result or invite card (F5)
+│  ├─ r/[code]/card/route.tsx       the same card 1080×1350 (?download=1 saves)
 │  ├─ globals.css             tokens, phase backgrounds, animations, shell classes
 │  └─ r/[code]/page.tsx       Promise.all on params/searchParams → WordpinchUI
 ├─ components/
@@ -53,6 +55,7 @@ src/
    ├─ collection.ts           server: collect_word, won words on resolve, reads
    ├─ room-fx.ts              reactions / cheers / letter count on the fx: topic
    ├─ game/rules.ts           F4 blockedLetters (no-repeat) shared by server and UI
+   ├─ og/                     F5 share card (next/og): match-card, fonts, render
    ├─ supabase/identity.ts    server: resolveCallerId (session first, clientId fallback)
    └─ game/
       ├─ preview.ts           dev preview state (see Routes)
@@ -104,7 +107,7 @@ npm run build      # production build (typechecks too)
 npm run test:e2e   # Playwright on 6 device profiles (dev server)
 ```
 
-Screenshots land in `test-results/screens/` (scrolled `.wp-body` segments as `-2`, `-3`…). The per-PR checklist is in `docs/redesign/03-code-mapping.md` §7. If a CSS change doesn't show, check the computed style: Turbopack's persistent dev cache (`.next/dev`) can keep serving an old `globals.css`, even across a restart. Stop the server, `rm -rf .next/dev`, start again.
+Screenshots land in `test-results/screens/` (scrolled `.wp-body` segments as `-2`, `-3`…). The per-PR checklist is in `docs/redesign/03-code-mapping.md` §7. If a CSS change doesn't show, check the computed style: Turbopack's persistent dev cache (`.next/dev`) can keep serving an old `globals.css`, even across a restart. Stop the server, `rm -rf .next/dev`, start again. The same goes for a folder created while the server runs: edits inside it were not picked up (`src/lib/og/` in F5).
 
 ## What's coming next (phase 3+)
 

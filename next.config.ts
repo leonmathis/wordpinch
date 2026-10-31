@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/words/validate": ["./src/lib/words/data/**"],
     "/api/words/suggest": ["./src/lib/words/data/**"],
+    // F4 peek picks its word from the same list.
+    "/api/rooms/[code]/peek": ["./src/lib/words/data/**"],
   },
 };
 
