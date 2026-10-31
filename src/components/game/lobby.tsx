@@ -159,8 +159,11 @@ function SettingRow({
   labelId,
   control,
   below,
+  isNew = false,
 }: {
   label: string;
+  /** A pink "New" tag after the label, for rules added in the redesign. */
+  isNew?: boolean;
   hint: string;
   /** Binds the label to a switch so the whole label toggles it. */
   htmlFor?: string;
@@ -176,6 +179,9 @@ function SettingRow({
           {htmlFor ? (
             <Label htmlFor={htmlFor} id={labelId} className={cn(text, "cursor-pointer")}>
               {label}
+              {isNew ? (
+                <span className="rounded-full bg-shape-pink px-2 py-0.5 text-[11px] font-extrabold text-[#141414]">New</span>
+              ) : null}
             </Label>
           ) : (
             <div id={labelId} className={text}>
@@ -257,7 +263,13 @@ function PlayerRow({
 
 export function Lobby({ ctx }: { ctx: GameCtx }) {
   const tieLabelId = React.useId();
-  const ids = { slang: React.useId(), bonus: React.useId(), audio: React.useId() };
+  const ids = {
+    slang: React.useId(),
+    bonus: React.useId(),
+    noRepeat: React.useId(),
+    peek: React.useId(),
+    audio: React.useId(),
+  };
   // Host renders settings as editable controls and owns the Start button;
   // the guest sees the same cards read-only. Names come straight from
   // canonical ctx fields — the viewer-perspective flip on ctx.you/ctx.them
@@ -313,6 +325,10 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
     ctx.settings.lengthBonus ?? false,
     commitLengthBonus
   );
+  const commitNoRepeat = React.useCallback((v: boolean) => commit({ noRepeat: v }), [commit]);
+  const commitPeek = React.useCallback((v: boolean) => commit({ peek: v }), [commit]);
+  const [noRepeat, setNoRepeat] = useOptimisticSetting(ctx.settings.noRepeat ?? false, commitNoRepeat);
+  const [peek, setPeek] = useOptimisticSetting(ctx.settings.peek ?? false, commitPeek);
 
   const roomLink = () => `${window.location.origin}/r/${ctx.roomCode}`;
   const copyLink = async () => {
@@ -521,6 +537,22 @@ export function Lobby({ ctx }: { ctx: GameCtx }) {
                     onCheckedChange={setLengthBonus}
                   />
                 }
+              />
+              <SettingRow
+                label="No repeat letters"
+                htmlFor={ids.noRepeat}
+                isNew
+                hint="A letter can only be picked once per match"
+                control={
+                  <Switch id={ids.noRepeat} disabled={readOnly} checked={noRepeat} onCheckedChange={setNoRepeat} />
+                }
+              />
+              <SettingRow
+                label="Peek hint"
+                htmlFor={ids.peek}
+                isNew
+                hint="Each player can reveal one letter per match"
+                control={<Switch id={ids.peek} disabled={readOnly} checked={peek} onCheckedChange={setPeek} />}
               />
             </div>
 

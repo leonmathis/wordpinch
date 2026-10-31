@@ -33,6 +33,10 @@ export type PersistedGameState = {
      * client-side fallback.
      */
     lengthBonus: boolean;
+    /** F4: a letter can be picked once per match (by either player). */
+    noRepeat?: boolean;
+    /** F4: each player can reveal one letter of a valid word per match. */
+    peek?: boolean;
   };
   players: {
     host: { name: string } | null;
@@ -146,6 +150,18 @@ export type PersistedGameState = {
    * since then. Absent before the first match.
    */
   matchStartedAt?: number;
+  /**
+   * F4 no-repeat: the letters revealed in each round of this match. A
+   * replayed round keeps its number, so "used" means rounds before the
+   * current one. Server-owned (lockPlayerLetter writes it).
+   */
+  usedLetters?: { round: number; letters: string[] }[];
+  /**
+   * F4 peek: the round in which each seat used its peek. The revealed
+   * letter itself is only in that player's response, never in the state.
+   * Server-owned (POST /api/rooms/[code]/peek writes it).
+   */
+  peeks?: Partial<Record<"host" | "guest", number>>;
 };
 
 /**
@@ -176,6 +192,8 @@ export function initialGameState({
       audioDefinitions: true,
       language: "en",
       lengthBonus: false,
+      noRepeat: false,
+      peek: false,
     },
     players: {
       host: { name: hostName },

@@ -26,7 +26,7 @@ const bubble = (page: Page) => page.locator(".fx-bubble");
 test.describe("race reactions", () => {
   const VIEWS = {
     plain: "phase=race&as=host",
-    incoming: "phase=race&as=host&rx=close&typed=4",
+    incoming: "phase=race&as=host&rx=close&typed=4&peek=1",
     cheer: "phase=race&as=guest&rx=go-guest&typed=7",
     stress: "phase=race&as=host&stress=1&rx=gg&typed=19",
   } as const;
@@ -96,7 +96,8 @@ test.describe("race reactions", () => {
     const vp = page.viewportSize()!;
     test.skip(vp.width >= 768, "phones only");
     await open(page, VIEWS.incoming);
-    const pills = await page.getByRole("group", { name: "Reactions" }).boundingBox();
+    // The reactions and (with peek on) the peek pill share one row.
+    const pills = await page.locator("[data-race-actions]").boundingBox();
     const limit = vp.height - 291;
     console.log(`[keyboard] ${test.info().project.name}: reactions end at ${(pills!.y + pills!.height).toFixed(0)}, keyboard starts at ${limit}`);
     expect(pills!.y + pills!.height).toBeLessThanOrEqual(limit);

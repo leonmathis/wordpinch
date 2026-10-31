@@ -154,6 +154,10 @@ export type GameCtx = {
    * `incoming` is the latest reaction or cheer from someone else, `lens`
    * the current round's letter count per seat (null until reported).
    */
+  /** F4: letters picked earlier this match, when "No repeat letters" is on. */
+  blocked: ReadonlySet<string>;
+  /** F4 peek: whether the rule is on, and the round this player spent it in. */
+  peek: { on: boolean; spentRound: number | null };
   fx: {
     incoming: Incoming | null;
     lens: Record<"host" | "guest", number | null>;

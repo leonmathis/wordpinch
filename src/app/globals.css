@@ -320,6 +320,26 @@
     margin-block: auto;
   }
 
+  /* F4 no-repeat: a letter picked earlier this match. Magenta hatch on
+   * white (pink on the dark surface), as in the pick artboard. */
+  .pick-used {
+    background-color: #ffffff;
+    background-image: repeating-linear-gradient(45deg, #b83a7e 0 2px, #ffffff 2px 6px);
+  }
+  .dark .pick-used {
+    background-color: var(--card);
+    background-image: repeating-linear-gradient(45deg, #f4b6d5 0 2px, var(--card) 2px 6px);
+  }
+  .pick-used-letter {
+    @apply flex size-[1.6em] items-center justify-center rounded-full;
+    background-color: #ffffff;
+    color: #141414;
+  }
+  .dark .pick-used-letter {
+    background-color: var(--card);
+    color: var(--muted-foreground);
+  }
+
   .typing-dots { @apply inline-flex items-center gap-[3px]; }
   .typing-dots i {
     width: 4px; height: 4px; border-radius: 50%; background: currentColor;

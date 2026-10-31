@@ -339,6 +339,43 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
     }
   }, []);
 
+  // F4 peek. A reload in the round it was spent asks again: the server
+  // returns the same letter without spending anything.
+  const [peeked, setPeeked] = React.useState<string | null>(null);
+  const [peekState, setPeekState] = React.useState<"idle" | "busy" | "none">("idle");
+  const spentEarlier = ctx.peek.spentRound !== null && ctx.peek.spentRound !== ctx.round;
+  const spentNow = ctx.peek.spentRound === ctx.round;
+  const peekRef = React.useRef(ctx.actions.peek);
+  React.useEffect(() => {
+    peekRef.current = ctx.actions.peek;
+  });
+  const actionsReady = ctx.actions.ready;
+  React.useEffect(() => {
+    if (!spentNow || !actionsReady) return;
+    let cancelled = false;
+    void peekRef.current().then((r) => {
+      if (!cancelled && "letter" in r) setPeeked(r.letter);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [spentNow, actionsReady]);
+  const doPeek = async () => {
+    if (peekState === "busy" || peeked || spentEarlier) return;
+    if (!ctx.actions.ready) {
+      // Design preview: no room, so the artboard's "O" stands in.
+      setPeeked("O");
+      return;
+    }
+    setPeekState("busy");
+    const r = await ctx.actions.peek();
+    if ("letter" in r) {
+      setPeeked(r.letter);
+      setPeekState("idle");
+    } else setPeekState(r.error === "no_word" ? "none" : "idle");
+  };
+  const peekUsed = !!peeked || spentEarlier || (ctx.collection.preview && spentNow);
+
   const urgent = left <= 5 && !paused;
   // The prefilled first letter alone ("1 letter") says nothing.
   const opponentLen = ctx.mySide ? ctx.fx.lens[ctx.mySide === "host" ? "guest" : "host"] : null;
@@ -362,8 +399,8 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
         {paused ? <OpponentAwayBanner ctx={ctx} className="mb-0" /> : null}
 
         <div className="flex items-center justify-between gap-2.5">
-          <LetterSlots first={A} last={B} size={84} className="justify-start gap-2 lg:hidden" />
-          <LetterSlots first={A} last={B} size={132} className="hidden justify-start gap-[18px] lg:flex" />
+          <LetterSlots first={A} last={B} peek={peeked} size={84} className="justify-start gap-2 lg:hidden" />
+          <LetterSlots first={A} last={B} peek={peeked} size={132} className="hidden justify-start gap-[18px] lg:flex" />
           <div className="flex shrink-0 flex-col items-center gap-1">
             <div
               role="timer"
@@ -472,7 +509,36 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
           ) : null}
         </div>
 
-        <ReactionPills ctx={ctx} ids={PLAYER_REACTIONS} label="Reactions" />
+        {/* One row above the phone keyboard: with peek on, four pills are
+         *  wider than a phone, so the row scrolls sideways (peek first, so
+         *  it never hides) instead of wrapping under the keyboard. */}
+        <div
+          data-race-actions
+          data-scroll-x
+          className="-mx-6 flex gap-2 overflow-x-auto px-6 [scrollbar-width:none] lg:mx-0 lg:flex-wrap lg:px-0 [&::-webkit-scrollbar]:hidden"
+        >
+          {ctx.peek.on ? (
+            <Button
+              type="button"
+              variant="pill-soft"
+              size="pill-md"
+              className={cn(
+                "shrink-0 font-bold",
+                peekUsed || peekState === "none" ? "" : "bg-shape-yellow text-[#141414] hover:bg-shape-yellow/85"
+              )}
+              disabled={peekUsed || peekState === "none"}
+              aria-busy={peekState === "busy" || undefined}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.stopPropagation();
+                void doPeek();
+              }}
+            >
+              {peekUsed ? "Peek used" : peekState === "none" ? "No hint this round" : peekState === "busy" ? "Peeking…" : "Peek a letter · 1"}
+            </Button>
+          ) : null}
+          <ReactionPills ctx={ctx} ids={PLAYER_REACTIONS} label="Reactions" className="flex-nowrap lg:flex-wrap" />
+        </div>
       </div>
     </div>
   );

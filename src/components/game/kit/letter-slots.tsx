@@ -14,6 +14,8 @@ type Props = {
    */
   firstFill?: string;
   lastFill?: string;
+  /** F4 peek: the revealed second letter, in a sage chip at the gap's start. */
+  peek?: string | null;
   className?: string;
 };
 
@@ -27,9 +29,13 @@ export function LetterSlots({
   size = 84,
   firstFill = "var(--shape-blue)",
   lastFill = "var(--shape-pink)",
+  peek = null,
   className,
 }: Props) {
-  const label = `Starts with ${first ?? "a hidden letter"}, ends with ${last ?? "a hidden letter"}`;
+  const label =
+    `Starts with ${first ?? "a hidden letter"}, ends with ${last ?? "a hidden letter"}` +
+    (peek ? `, second letter ${peek}` : "");
+  const dash = Math.round(size * 0.36);
   return (
     <div role="img" aria-label={label} className={cn("flex items-center justify-center gap-2.5", className)}>
       {first ? (
@@ -37,13 +43,23 @@ export function LetterSlots({
       ) : (
         <ShapeGlyph kind="ring" size={size} glyph="?" fill="var(--muted-foreground)" color="var(--muted-foreground)" />
       )}
-      <span
-        aria-hidden
-        className="font-hand tracking-[3px] text-muted-foreground"
-        style={{ fontSize: Math.round(size * 0.36) }}
-      >
-        _ _ _
-      </span>
+      {peek ? (
+        <span aria-hidden className="flex items-center gap-1.5 font-hand text-muted-foreground" style={{ fontSize: dash }}>
+          <span
+            data-peek
+            className="flex items-center justify-center rounded-xl bg-shape-sage leading-none text-[#141414]"
+            // Gochi Hand sits high in its em box; the top padding centres it.
+            style={{ width: Math.round(size * 0.48), height: Math.round(size * 0.52), fontSize: Math.round(size * 0.36), paddingTop: "0.16em" }}
+          >
+            {peek}
+          </span>
+          <span className="tracking-[3px] whitespace-nowrap">_ _</span>
+        </span>
+      ) : (
+        <span aria-hidden className="font-hand tracking-[3px] text-muted-foreground" style={{ fontSize: dash }}>
+          _ _ _
+        </span>
+      )}
       {last ? (
         <ShapeGlyph kind="star" size={size} glyph={last} fill={lastFill} />
       ) : (

@@ -34,24 +34,33 @@ function isTypingTarget(t: EventTarget | null) {
 function LetterGrid({
   value,
   disabled,
+  blocked,
   onPick,
 }: {
   value: string;
   disabled: boolean;
+  /** F4: letters picked earlier this match; shown hatched, not pickable. */
+  blocked: ReadonlySet<string>;
   onPick: (letter: string) => void;
 }) {
   const refs = React.useRef<(HTMLButtonElement | null)[]>([]);
-  const current = Math.max(0, ALPHABET.indexOf(value));
-  const move = (to: number) => {
-    const i = Math.min(ALPHABET.length - 1, Math.max(0, to));
-    onPick(ALPHABET[i]);
-    refs.current[i]?.focus();
+  const firstFree = ALPHABET.findIndex((l) => !blocked.has(l));
+  const current = ALPHABET.includes(value) && !blocked.has(value) ? ALPHABET.indexOf(value) : Math.max(0, firstFree);
+  // Arrow keys skip used letters: step on in the same direction until a
+  // free one, and stay put if there is none.
+  const move = (from: number, step: number) => {
+    for (let i = from + step; i >= 0 && i < ALPHABET.length; i += step) {
+      if (blocked.has(ALPHABET[i])) continue;
+      onPick(ALPHABET[i]);
+      refs.current[i]?.focus();
+      return;
+    }
   };
   const onKeyDown = (e: React.KeyboardEvent) => {
     const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLS, ArrowUp: -COLS }[e.key];
-    if (step) move(current + step);
-    else if (e.key === "Home") move(0);
-    else if (e.key === "End") move(ALPHABET.length - 1);
+    if (step) move(current, step);
+    else if (e.key === "Home") move(-1, 1);
+    else if (e.key === "End") move(ALPHABET.length, -1);
     else return;
     e.preventDefault();
   };
@@ -68,6 +77,7 @@ function LetterGrid({
     >
       {ALPHABET.map((l, i) => {
         const on = l === value;
+        const used = blocked.has(l);
         return (
           <Button
             key={l}
@@ -76,17 +86,24 @@ function LetterGrid({
             }}
             role="radio"
             aria-checked={on}
+            aria-label={used ? `${l}, already picked` : undefined}
             tabIndex={i === current ? 0 : -1}
-            disabled={disabled}
+            disabled={disabled || used}
             onClick={() => onPick(l)}
             // Disabled keys are the whole grid dimmed at once, not
             // individually faded on top of that.
             className={cn(
               "h-11 min-w-0 rounded-full p-0 text-base font-extrabold disabled:opacity-100 lg:h-15 lg:text-xl",
-              on ? "bg-primary text-primary-foreground hover:bg-primary/85" : "bg-card text-card-foreground hover:bg-card/80"
+              on
+                ? "bg-primary text-primary-foreground hover:bg-primary/85"
+                : used
+                  ? "pick-used"
+                  : "bg-card text-card-foreground hover:bg-card/80"
             )}
           >
-            {l}
+            {/* On the hatch the letter sits on a small solid patch, so it
+             *  stays readable (the stripes ran straight through it). */}
+            {used ? <span className="pick-used-letter">{l}</span> : l}
           </Button>
         );
       })}
@@ -137,7 +154,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
       // Leave keys alone inside menus and dialogs.
       if (e.target instanceof HTMLElement && e.target.closest("[role='dialog'], [data-slot='popover-content']")) return;
       if (/^[a-z]$/i.test(e.key)) {
-        setVal(e.key.toUpperCase());
+        if (!ctx.blocked.has(e.key.toUpperCase())) setVal(e.key.toUpperCase());
       } else if (e.key === "Enter" && val) {
         const t = e.target;
         // Enter on another button (Settings, Words played) keeps its own meaning.
@@ -148,7 +165,7 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [locked, val, lock]);
+  }, [locked, val, lock, ctx.blocked]);
 
   const mineSize = "size-[84px] lg:size-[120px]";
   const mine = (size: number) =>
@@ -273,8 +290,16 @@ export function PickPhase({ ctx }: { ctx: GameCtx }) {
           </div>
 
           <div className="flex min-w-0 flex-col gap-2.5 lg:[grid-area:letters]">
-            <h2 className="m-0 text-lg font-bold">Letters</h2>
-            <LetterGrid value={val} disabled={locked} onPick={setVal} />
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="m-0 text-lg font-bold">Letters</h2>
+              {ctx.blocked.size > 0 ? (
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
+                  <span aria-hidden className="pick-used size-[18px] rounded-full" />
+                  already picked this match
+                </span>
+              ) : null}
+            </div>
+            <LetterGrid value={val} disabled={locked} blocked={ctx.blocked} onPick={setVal} />
           </div>
 
           <div className="flex min-w-0 flex-col gap-2.5 lg:self-start lg:gap-[18px] lg:[grid-area:status]">

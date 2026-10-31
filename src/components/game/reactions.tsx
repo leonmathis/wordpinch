@@ -10,7 +10,17 @@ import { cn } from "@/lib/utils";
  * F3: a row of reaction (player) or cheer (spectator) pills. After a tap
  * the row rests briefly, so a held finger can't flood the room.
  */
-export function ReactionPills({ ctx, ids, label }: { ctx: GameCtx; ids: ReactionId[]; label: string }) {
+export function ReactionPills({
+  ctx,
+  ids,
+  label,
+  className,
+}: {
+  ctx: GameCtx;
+  ids: ReactionId[];
+  label: string;
+  className?: string;
+}) {
   const [resting, setResting] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => () => {
@@ -18,14 +28,14 @@ export function ReactionPills({ ctx, ids, label }: { ctx: GameCtx; ids: Reaction
   }, []);
   const names = { host: ctx.hostName, guest: ctx.guestName };
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+    <div role="group" aria-label={label} className={cn("flex flex-wrap gap-2", className)}>
       {ids.map((id) => (
         <Button
           key={id}
           type="button"
           variant="pill-soft"
           size="pill-md"
-          className="max-w-full min-w-0 font-semibold"
+          className="max-w-full min-w-0 shrink-0 font-semibold"
           aria-disabled={resting || undefined}
           // Keep focus where it is: in the race that is the word input, and
           // moving it would close the phone keyboard mid-word.

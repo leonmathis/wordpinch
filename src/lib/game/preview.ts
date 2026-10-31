@@ -32,6 +32,10 @@ export type PreviewOpts = {
   rx: ReactionId | null;
   /** The opponent's letter count in the race (`?typed=4`). */
   typed: number | null;
+  /** F4 no-repeat on, with G E P K picked in rounds 1–2 (`?norepeat=1`). */
+  noRepeat: boolean;
+  /** F4 peek on (`?peek=1`), or already spent in round 1 (`?peek=used`). */
+  peek: "off" | "on" | "used";
 };
 
 export const RESULT_VARIANTS = [
@@ -157,6 +161,8 @@ export function parsePreview(
     collected?: string;
     rx?: string;
     typed?: string;
+    norepeat?: string;
+    peek?: string;
   }
 ): PreviewOpts | null {
   if (sp.as !== "host" && sp.as !== "guest" && sp.as !== "spectator") return null;
@@ -175,6 +181,8 @@ export function parsePreview(
     collected: Math.max(0, Math.min(99, Number.parseInt(sp.collected ?? "0", 10) || 0)),
     rx: sp.rx && Object.hasOwn(REACTIONS, sp.rx) ? (sp.rx as ReactionId) : null,
     typed: sp.typed && /^\d{1,2}$/.test(sp.typed) ? Number(sp.typed) : null,
+    noRepeat: sp.norepeat === "1",
+    peek: sp.peek === "used" ? "used" : sp.peek === "1" ? "on" : "off",
   };
 }
 
@@ -186,7 +194,18 @@ export function previewState(opts: PreviewOpts): PersistedGameState {
   return {
     ...base,
     phase: opts.phase,
-    settings: { ...base.settings, rounds: 7, roundTimerSec: 30, minWordLength: 4 },
+    settings: {
+      ...base.settings,
+      rounds: 7,
+      roundTimerSec: 30,
+      minWordLength: 4,
+      noRepeat: opts.noRepeat,
+      peek: opts.peek !== "off",
+    },
+    ...(opts.noRepeat && inMatch
+      ? { usedLetters: [{ round: 1, letters: ["G", "E"] }, { round: 2, letters: ["P", "K"] }] }
+      : {}),
+    ...(opts.peek === "used" && opts.as !== "spectator" ? { peeks: { [opts.as]: 1 } } : {}),
     players: { host: { name: hostName }, guest: opts.guest ? { name: guestName } : null },
     // Mid-match from pick on: round 3 of 7, host leads 2–1.
     ...(inMatch

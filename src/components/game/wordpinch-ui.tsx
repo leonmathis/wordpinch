@@ -29,6 +29,7 @@ import { SettlingPhase } from "./settling-phase";
 import { TopChrome } from "./top-chrome";
 import { useHasAccount, useIdentity } from "@/lib/identity";
 import { REACTIONS, useRoomFx } from "@/lib/room-fx";
+import { blockedLetters } from "@/lib/game/rules";
 
 /**
  * How long the host must be missing from presence before the guest's client
@@ -355,6 +356,17 @@ export function WordpinchUI({
     };
   }, [preview, previewRx, previewTyped, previewOpp, previewAt, fxIncoming, fxTyped, fxRound, fxReact, fxTyping]);
 
+  // F4: derived from server-owned fields, so every screen agrees.
+  const liveUsedLetters = liveState?.usedLetters;
+  const blocked = React.useMemo(
+    () => blockedLetters({ settings, round, usedLetters: liveUsedLetters }),
+    [settings, round, liveUsedLetters]
+  );
+  const mySeat = role === "host" || role === "guest" ? role : null;
+  const spentRound = mySeat ? (liveState?.peeks?.[mySeat] ?? null) : null;
+  const peekOn = !!settings.peek;
+  const peek = React.useMemo(() => ({ on: peekOn, spentRound }), [peekOn, spentRound]);
+
   const ctx: GameCtx = React.useMemo(
     () => ({
       phase,
@@ -400,6 +412,8 @@ export function WordpinchUI({
       roundOutcomes,
       roomCode: roomCode ?? "",
       collection,
+      blocked,
+      peek,
       fx,
       shareOpen,
       reconnectOpen,
@@ -449,6 +463,8 @@ export function WordpinchUI({
       sceneKey,
       roomCode,
       collection,
+      blocked,
+      peek,
       fx,
       openShare,
       closeShare,

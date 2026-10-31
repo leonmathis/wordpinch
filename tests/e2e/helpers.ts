@@ -63,7 +63,11 @@ export async function findHorizontalOverflow(page: Page) {
       const r = el.getBoundingClientRect();
       if (r.width <= 2 || r.height <= 2) continue;
       if (el.closest("[data-slot='dialog-content'], [data-sonner-toaster], nextjs-portal")) continue;
-      const limit = Math.min(vw, clipRight(el));
+      const clip = clipRight(el);
+      // Inside an intended sideways scroller: its content may run past the
+      // screen (the scroller itself is still checked against its parent).
+      if (clip === Infinity) continue;
+      const limit = Math.min(vw, clip);
       if (r.right > limit + 1) {
         const label = (el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40);
         out.push(`${el.tagName.toLowerCase()} +${Math.round(r.right - limit)}px "${label}"`);
