@@ -422,6 +422,7 @@ export function WordpinchUI({
         onToggleMute={ctx.toggleMute}
         onShare={ctx.openShare}
         roomCode={roomCode && phase !== "landing" ? ctx.roomCode : undefined}
+        over={phase === "matchend"}
         // Phases already on the redesign carry the score in the top bar;
         // the rest still show ScoreHud until their round (R8).
         score={

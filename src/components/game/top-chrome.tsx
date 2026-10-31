@@ -11,6 +11,8 @@ type Props = {
   onShare?: () => void;
   /** Room code when in a room; the menu then offers share and leave. */
   roomCode?: string;
+  /** Match end: "Match over · 7 rounds" with every pill filled. */
+  over?: boolean;
   /** Inline score, "Leon 2 · 1 Juno", next to the round label. */
   score?: { you: { name: string; score: number }; them: { name: string; score: number } };
 };
@@ -28,7 +30,7 @@ function pillWidth(total: number) {
  * wordmark outside a match), one settings gear on the right. Theme, sound,
  * share and leave live in the gear's menu.
  */
-export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, roomCode, score }: Props) {
+export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, roomCode, over, score }: Props) {
   const inMatch = round > 0 && total > 0;
   const width = inMatch ? pillWidth(total) : 0;
 
@@ -37,7 +39,7 @@ export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, room
       {inMatch ? (
         <div className="flex flex-col gap-1.5">
           <div className="text-[13px] font-bold whitespace-nowrap">
-            Round {round} of {total}
+            {over ? `Match over · ${total} rounds` : `Round ${round} of ${total}`}
             {score ? (
               <>
                 {" · "}
@@ -52,7 +54,7 @@ export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, room
               <span
                 key={i}
                 className="h-1.5 rounded-full bg-foreground"
-                style={{ width, opacity: i < round - 1 ? 1 : i === round - 1 ? 0.45 : 0.15 }}
+                style={{ width, opacity: over || i < round - 1 ? 1 : i === round - 1 ? 0.45 : 0.15 }}
               />
             ))}
           </div>

@@ -18,7 +18,7 @@ const VALID_PHASES = new Set<GamePhase>([
 
 type Props = {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ phase?: string; reconnect?: string; as?: string; guest?: string; stress?: string; away?: string; opp?: string; settling?: string; result?: string }>;
+  searchParams: Promise<{ phase?: string; reconnect?: string; as?: string; guest?: string; stress?: string; away?: string; opp?: string; settling?: string; result?: string; end?: string; rounds?: string }>;
 };
 
 export default async function RoomPage({ params, searchParams }: Props) {

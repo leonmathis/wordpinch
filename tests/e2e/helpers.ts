@@ -222,3 +222,41 @@ export async function finishAnimations(page: Page) {
   );
 }
 
+
+/**
+ * Smallest distance (px) from the text inside each visible flower `Shape`
+ * under `root` to the flower's real scalloped outline (same geometry as
+ * the kit test). Text corners are inset 12% vertically, as there.
+ */
+export async function flowerClearance(page: Page, root = "body") {
+  return page.evaluate((root) => {
+    const FL = [[100,100,62],[166,100,22],[157.2,133,22],[133,157.2,22],[100,166,22],[67,157.2,22],[43,133,22],[34,100,22],[43,67,22],[67,42.8,22],[100,34,22],[133,42.8,22],[157.2,67,22]];
+    const edge: number[][] = [];
+    for (const [cx, cy, r] of FL)
+      for (let a = 0; a < 360; a++) {
+        const x = cx + r * Math.cos((a * Math.PI) / 180), y = cy + r * Math.sin((a * Math.PI) / 180);
+        if (!FL.some(([ox, oy, or]) => (ox !== cx || oy !== cy) && Math.hypot(x - ox, y - oy) < or - 0.01)) edge.push([x, y]);
+      }
+    const out: number[] = [];
+    for (const shape of Array.from(document.querySelector(root)!.querySelectorAll<HTMLElement>("[data-shape='flower']"))) {
+      if (!shape.offsetParent) continue;
+      const s = shape.getBoundingClientRect();
+      const k = s.width / 200, cx = s.left + s.width / 2, cy = s.top + s.height / 2;
+      let min = Infinity;
+      const content = shape.lastElementChild!;
+      const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!n.textContent!.trim()) continue;
+        const rg = document.createRange();
+        rg.selectNodeContents(n);
+        for (const r of Array.from(rg.getClientRects()))
+          for (const [px, py] of [[r.left, r.top + r.height * 0.12], [r.right, r.top + r.height * 0.12], [r.left, r.bottom - r.height * 0.12], [r.right, r.bottom - r.height * 0.12]]) {
+            const ux = (px - cx) / k + 100, uy = (py - cy) / k + 100;
+            for (const [bx, by] of edge) min = Math.min(min, Math.hypot(ux - bx, uy - by) * k);
+          }
+      }
+      if (min !== Infinity) out.push(min);
+    }
+    return out;
+  }, root);
+}

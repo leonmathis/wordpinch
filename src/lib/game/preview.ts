@@ -21,6 +21,10 @@ export type PreviewOpts = {
   settling: boolean;
   /** Round result variant (`?result=…`), for phase=result. */
   result: ResultVariant;
+  /** Match outcome for the host (`?end=win|loss|tie`), for phase=matchend. */
+  end: "win" | "loss" | "tie";
+  /** Match length for phase=matchend (`?rounds=15`). */
+  rounds: 7 | 15;
 };
 
 export const RESULT_VARIANTS = [
@@ -46,6 +50,54 @@ const TOOTH = {
     },
   ],
 };
+
+type Used = PersistedGameState["usedWords"][number];
+type Outcome = NonNullable<PersistedGameState["rounds"]>[number];
+
+/**
+ * A finished match: one word per round where someone scored, a near miss
+ * in round 3, a both-scored tie in 4 and outcome-only rounds. Host leads
+ * 4–3 (`win`); `loss` and `tie` adjust the last round and the totals.
+ */
+function finishedMatch(end: PreviewOpts["end"], rounds: 7 | 15, stress: boolean) {
+  const u = (round: number, word: string, by: Used["by"], s: number): Used => ({ round, word, ipa: "", by, timeMs: s * 1000 });
+  const used: Used[] = [
+    u(1, "glove", "host", 3.1),
+    u(2, "plank", "guest", 4.0),
+    u(3, "tooth", "host", 2.4),
+    u(3, "teeth", "guest", 2.5),
+    u(4, "brisk", "host", 5.2),
+    u(4, "brick", "guest", 5.2),
+    u(5, stress ? "uncharacteristically" : "queen", "host", 6.8),
+    u(7, "shrimp", "guest", 3.9),
+  ];
+  const outcomes: Outcome[] = [
+    { round: 1, winner: "host" },
+    { round: 2, winner: "guest" },
+    { round: 3, winner: "host" },
+    { round: 4, winner: "split" },
+    { round: 5, winner: "host" },
+    { round: 6, winner: "none", reason: "timeout" },
+    { round: 7, winner: "guest" },
+  ];
+  if (rounds === 15) {
+    used.push(u(8, "chair", "host", 4.4), u(10, "mouth", "guest", 2.9), u(11, "plush", "host", 5.0), u(13, "graph", "guest", 3.3), u(14, "swish", "host", 4.1));
+    outcomes.push(
+      { round: 8, winner: "host" },
+      { round: 9, winner: "none", reason: "tied_nobody" },
+      { round: 10, winner: "guest" },
+      { round: 11, winner: "host" },
+      { round: 12, winner: "split", reason: "timeout" },
+      { round: 13, winner: "guest" },
+      { round: 14, winner: "host" },
+      { round: 15, winner: "guest", reason: "forfeit" },
+    );
+  }
+  const base = rounds === 15 ? { host: 8, guest: 7 } : { host: 4, guest: 3 };
+  const scores =
+    end === "win" ? base : end === "loss" ? { host: base.guest, guest: base.host } : { host: base.host - 0.5, guest: base.host - 0.5 };
+  return { used, outcomes, scores };
+}
 
 /** Round 3's result and the scores after it, host = Leon. */
 function resultFor(v: ResultVariant, stress: boolean): Pick<PersistedGameState, "result" | "scores"> {
@@ -85,7 +137,17 @@ function resultFor(v: ResultVariant, stress: boolean): Pick<PersistedGameState, 
 
 export function parsePreview(
   phase: GamePhase,
-  sp: { as?: string; guest?: string; stress?: string; away?: string; opp?: string; settling?: string; result?: string }
+  sp: {
+    as?: string;
+    guest?: string;
+    stress?: string;
+    away?: string;
+    opp?: string;
+    settling?: string;
+    result?: string;
+    end?: string;
+    rounds?: string;
+  }
 ): PreviewOpts | null {
   if (sp.as !== "host" && sp.as !== "guest") return null;
   return {
@@ -98,6 +160,8 @@ export function parsePreview(
     oppSubmitted: sp.opp === "submitted",
     settling: sp.settling === "1",
     result: (RESULT_VARIANTS as readonly string[]).includes(sp.result ?? "") ? (sp.result as ResultVariant) : "win",
+    end: sp.end === "loss" || sp.end === "tie" ? sp.end : "win",
+    rounds: sp.rounds === "15" ? 15 : 7,
   };
 }
 
@@ -142,6 +206,18 @@ export function previewState(opts: PreviewOpts): PersistedGameState {
             { round: 2, word: opts.stress ? "uncharacteristically" : "plank", ipa: "", by: "guest" as const, timeMs: 12_100 },
           ],
         }
+      : {}),
+    ...(opts.phase === "matchend"
+      ? (() => {
+          const m = finishedMatch(opts.end, opts.rounds, opts.stress);
+          return {
+            round: opts.rounds,
+            settings: { ...base.settings, rounds: opts.rounds, roundTimerSec: 30, minWordLength: 4 },
+            scores: m.scores,
+            usedWords: m.used,
+            rounds: m.outcomes,
+          };
+        })()
       : {}),
   };
 }
