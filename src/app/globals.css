@@ -7,9 +7,18 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-urbanist);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-urbanist);
+  --font-hand: var(--font-gochi-hand);
+  --color-row: var(--row);
+  --color-shape-blue: var(--shape-blue);
+  --color-shape-pink: var(--shape-pink);
+  --color-shape-yellow: var(--shape-yellow);
+  --color-shape-sage: var(--shape-sage);
+  --color-shape-magenta: var(--shape-magenta);
+  --color-anchor-first: var(--anchor-first);
+  --color-anchor-last: var(--anchor-last);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,26 +58,50 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Pastel Pop tokens (docs/redesign/02-design-progress.md §Tokens). The
+ * shadcn names are kept so existing primitives pick the palette up before
+ * each screen is migrated. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --muted-soft: oklch(0.58 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #f5f0e3;
+  --foreground: #141414;
+  --card: #ffffff;
+  --card-foreground: #141414;
+  --popover: #ffffff;
+  --popover-foreground: #141414;
+  --primary: #141414;
+  --primary-foreground: #ffffff;
+  --secondary: #ebe4d4;
+  --secondary-foreground: #141414;
+  --muted: #ebe4d4;
+  --muted-foreground: #4f4a40;
+  --muted-soft: #5e5a50;
+  --accent: #ebe4d4;
+  --accent-foreground: #141414;
+  --destructive: #b3261e;
+  --border: #e2dac7;
+  --input: #d6cdb8;
+  --ring: #141414;
+  --row: #f5f0e3;
+
+  /* Shape fills stay pastel in both themes; text on them is always ink. */
+  --shape-blue: #b8cdee;
+  --shape-pink: #f4b6d5;
+  --shape-yellow: #f5d565;
+  --shape-sage: #a9b97c;
+  --shape-magenta: #b83a7e;
+
+  /* First / last letter of a word. Light values are large-text only (≥3:1). */
+  --anchor-first: #3a62b0;
+  --anchor-last: #b83a7e;
+
+  /* One background per phase; `.wp-root[data-phase]` picks it up. */
+  --phase-landing: #f5f0e3;
+  --phase-lobby: #f5d565;
+  --phase-pick: #f4b6d5;
+  --phase-reveal: #b8cdee;
+  --phase-race: #f5f0e3;
+  --phase-result: #dce4c3;
+  --phase-matchend: #b8cdee;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -86,25 +119,38 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --muted-soft: oklch(0.62 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #1b1915;
+  --foreground: #f5f0e3;
+  --card: #2a2621;
+  --card-foreground: #f5f0e3;
+  --popover: #2a2621;
+  --popover-foreground: #f5f0e3;
+  --primary: #f5f0e3;
+  --primary-foreground: #141414;
+  --secondary: #35302a;
+  --secondary-foreground: #f5f0e3;
+  --muted: #35302a;
+  --muted-foreground: #b8b2a6;
+  --muted-soft: #a8a296;
+  --accent: #35302a;
+  --accent-foreground: #f5f0e3;
+  --destructive: #ff8a80;
+  --border: rgb(245 240 227 / 10%);
+  --input: rgb(245 240 227 / 15%);
+  --ring: #f5f0e3;
+  --row: #35302a;
+
+  --anchor-first: #b8cdee;
+  --anchor-last: #f4b6d5;
+
+  /* Dark mode keeps one warm ground; phase identity comes from the shapes. */
+  --phase-landing: #1b1915;
+  --phase-lobby: #1b1915;
+  --phase-pick: #1b1915;
+  --phase-reveal: #1b1915;
+  --phase-race: #1b1915;
+  --phase-result: #1b1915;
+  --phase-matchend: #1b1915;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -126,7 +172,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "ss01", "cv11";
   }
   html {
     @apply font-sans;
@@ -213,8 +258,20 @@
 
   /* ── Game UI shell ────────────────────────────────────────────────── */
   .wp-root {
-    @apply relative w-full flex-1 flex flex-col bg-background text-foreground;
+    @apply relative w-full flex-1 flex flex-col text-foreground;
     min-height: 100%;
+    background-color: var(--wp-phase-bg, var(--background));
+    transition: background-color 260ms ease;
+  }
+  .wp-root[data-phase="landing"] { --wp-phase-bg: var(--phase-landing); }
+  .wp-root[data-phase="lobby"] { --wp-phase-bg: var(--phase-lobby); }
+  .wp-root[data-phase="pick"] { --wp-phase-bg: var(--phase-pick); }
+  .wp-root[data-phase="reveal"] { --wp-phase-bg: var(--phase-reveal); }
+  .wp-root[data-phase="race"] { --wp-phase-bg: var(--phase-race); }
+  .wp-root[data-phase="result"] { --wp-phase-bg: var(--phase-result); }
+  .wp-root[data-phase="matchend"] { --wp-phase-bg: var(--phase-matchend); }
+  @media (prefers-reduced-motion: reduce) {
+    .wp-root { transition: none; }
   }
 
   .wp-progress {

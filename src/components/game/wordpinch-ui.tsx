@@ -378,9 +378,12 @@ export function WordpinchUI({
   // — two identical share icons a few pixels apart read as a bug, not a
   // choice.
   const showChromeShare = phase !== "landing" && phase !== "lobby";
+  // Picks the phase background in globals.css. Settling reads as part of
+  // the race, so it keeps the race colour.
+  const backgroundPhase = isSettling ? "race" : phase;
 
   return (
-    <div className="wp-root" data-room={ctx.roomCode}>
+    <div className="wp-root" data-room={ctx.roomCode} data-phase={backgroundPhase}>
       {/* Status banners live in normal flow above the phase, so they clear
        *  the top chrome and shrink the body instead of covering either.
        *  `roleFailed`: role resolution failed (offline, 5xx, rate limit) —

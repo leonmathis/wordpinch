@@ -40,6 +40,7 @@ Every PR leaves the game playable.
 - **`:root` and `.dark`:** replace the neutral oklch values with the D tokens from 02 §Tokens. The shadcn names stay so primitives keep working:
   - `--background`, `--foreground`, `--card` (white / `#2A2621`)
   - `--muted`, `--muted-foreground`, `--primary` (ink / cream), `--destructive` (`#B3261E` / `#FF8A80`)
+  - `--muted-foreground` is `#4F4A40`, darker than the design grey `#555555`. Measured 31.10.: `#555555` reaches only 4.44:1 on the pick pink, while `#4F4A40` gives ≥5.2:1 on every phase background.
   - `--ring`, `--radius` (pill-first)
 - **New tokens:**
   - phase backgrounds: `--phase-landing`, `--phase-lobby`, `--phase-pick`, `--phase-reveal`, `--phase-race`, `--phase-result`, `--phase-matchend`, `--phase-daily`, `--phase-quick`, `--phase-pass`
@@ -51,7 +52,7 @@ Every PR leaves the game playable.
 
 ### Fonts (`src/app/layout.tsx`)
 - Replace Geist with **Urbanist** (500–800) as `--font-sans` and **Gochi Hand** (400) as `--font-hand`. Check `13-fonts.md` for the current `next/font/google` API first.
-- **Geist Mono:** its only remaining use is the room-code input, which becomes Urbanist with letter spacing, so drop it.
+- **Geist Mono stays until R10.** Not only the room-code input uses `font-mono`: so do the `.t-label`/`.t-label-up` helpers and several screens. It goes once the last of them is migrated.
 - **`themeColor`:** `#F5F0E3` light, `#1B1915` dark.
 
 ### Toasts (`src/components/ui/sonner.tsx`)
@@ -134,7 +135,7 @@ Legend:
 
 ## 6. Order of work (each line is one PR)
 
-**Before R1:** take baseline screenshots of every phase via the dev phase strip (`/r/slate-9f?phase=…`, `?reconnect=1`) at 390px and 1280px, light and dark. Commit them under `docs/redesign/baseline/`, or keep them local if they're too large.
+**Before R1:** take baseline screenshots of every phase via the dev phase strip (`/r/K7QM?phase=…`, `?reconnect=1`; the code must be 4 valid characters, the `slate-9f` in AGENTS.md now 404s) at 390px and 1280px, light and dark. Commit them under `docs/redesign/baseline/`, or keep them local if they're too large.
 
 | PR | Contents | Depends on |
 |---|---|---|
