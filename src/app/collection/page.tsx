@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CollectionPage } from "@/components/game/collection-page";
 
 export const metadata: Metadata = {
-  title: "Your words · wordpinch",
+  title: "Your words",
   description: "Every word you've won or saved, with its meaning.",
 };
 

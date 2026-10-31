@@ -31,6 +31,7 @@ const WORDS = [
   { word: "brisk", definitions: def("Active, fast and energetic."), source: "won", opponent: "Ada", time_ms: 5200, created_at: daysAgo(2) },
   { word: "plank", definitions: def("A long, thin, flat piece of timber."), source: "saved", opponent: "Juno", time_ms: null, created_at: daysAgo(4) },
   { word: "queen", definitions: [], source: "won", opponent: null, time_ms: 6800, created_at: daysAgo(4) },
+  { word: "quoin", definitions: def("An external angle of a wall or building."), source: "won", opponent: null, time_ms: 6100, daily_number: 128, created_at: daysAgo(5) },
 ];
 
 const STRESS = [
@@ -90,12 +91,12 @@ test.describe("collection page", () => {
     await openCollection(page, { words: WORDS });
     await expect(page.getByText("Leon", { exact: true })).toBeVisible();
     const stats = page.locator(".wp-body .grid-cols-3 > div");
-    await expect(stats.nth(0)).toHaveText("6words");
+    await expect(stats.nth(0)).toHaveText("7words");
     await expect(stats.nth(1)).toHaveText("2.4 sfastest");
     // Today, yesterday, two days ago; four days ago is after a gap.
     await expect(stats.nth(2)).toHaveText("3day streak");
 
-    await expect(cards(page)).toHaveCount(6);
+    await expect(cards(page)).toHaveCount(7);
     const first = cards(page).first();
     await expect(first).toContainText("tooth");
     await expect(first).toContainText("won");
@@ -104,6 +105,8 @@ test.describe("collection page", () => {
     // No opponent, no meaning: the meta line drops the name, and the card says so.
     await expect(cards(page).nth(5)).toContainText("No meaning saved for this one.");
     await expect(cards(page).nth(5)).toContainText(/^.*won.*6\.8 s · \d+\.\d+\.$/);
+    // A daily pinch word says where it came from.
+    await expect(cards(page).nth(6)).toContainText(/Daily pinch #128 · 6\.1 s · \d+\.\d+\./);
 
     // Anchor letters: first and last letter coloured, middle in ink.
     const colours = await first.locator("span").first().evaluate((el) => {
@@ -116,14 +119,14 @@ test.describe("collection page", () => {
 
     const filter = page.getByRole("group", { name: "Filter words" });
     await filter.getByRole("button", { name: "Won" }).click();
-    await expect(cards(page)).toHaveCount(4);
+    await expect(cards(page)).toHaveCount(5);
     for (const t of await cards(page).allTextContents()) expect(t).toContain("won");
     await filter.getByRole("button", { name: "Saved" }).click();
     await expect(cards(page)).toHaveCount(2);
     await expect(cards(page).first()).toContainText("shrimp");
     await attachScreenshot(page, testInfo, "collection-saved");
     await filter.getByRole("button", { name: "All" }).click();
-    await expect(cards(page)).toHaveCount(6);
+    await expect(cards(page)).toHaveCount(7);
 
     // Desktop shows three cards per row, phones one.
     const lefts = new Set(await cards(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left))));
@@ -156,7 +159,7 @@ test.describe("collection page", () => {
     await page.goto("/collection");
     await expect(page.locator(".wp-body").getByRole("alert")).toContainText("Couldn't load your words");
     await page.getByRole("button", { name: "Try again" }).click();
-    await expect(cards(page)).toHaveCount(6);
+    await expect(cards(page)).toHaveCount(7);
   });
 
   test("the landing bookmark opens it, and back returns", async ({ page }) => {

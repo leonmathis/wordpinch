@@ -19,6 +19,8 @@ export type CollectedWord = {
   source: "won" | "saved";
   opponent: string | null;
   time_ms: number | null;
+  /** F6: won in a daily pinch. */
+  daily_number?: number | null;
   created_at: string;
 };
 
@@ -56,7 +58,8 @@ export function dayStreak(words: Pick<CollectedWord, "created_at">[], now = new 
 function meta(w: CollectedWord) {
   const date = shortDate(w.created_at);
   if (w.source === "saved") return w.opponent ? `saved from ${w.opponent} · ${date}` : `saved · ${date}`;
-  return [w.opponent ? `vs ${w.opponent}` : null, w.time_ms !== null ? seconds(w.time_ms) : null, date]
+  const where = w.daily_number ? `Daily pinch #${w.daily_number}` : w.opponent ? `vs ${w.opponent}` : null;
+  return [where, w.time_ms !== null ? seconds(w.time_ms) : null, date]
     .filter(Boolean)
     .join(" · ");
 }

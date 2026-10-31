@@ -115,7 +115,18 @@ export function Landing() {
       busy: creating,
     },
     ...(FEATURES.dailyPinch
-      ? [{ id: "daily", kind: "star" as const, fill: "var(--shape-pink)", title: "Daily\npinch", sub: "Q _ _ _ N" }]
+      ? [
+          {
+            id: "daily",
+            kind: "star" as const,
+            fill: "var(--shape-pink)",
+            title: "Daily\npinch",
+            // The artboard showed today's letters here; they stay hidden
+            // until the player starts (the clock starts with them).
+            sub: "one try a day",
+            onSelect: () => router.push("/daily"),
+          },
+        ]
       : []),
     ...(FEATURES.quickMatch
       ? [{ id: "quick", kind: "circle" as const, fill: "var(--shape-blue)", title: "Quick\nmatch", sub: "find a rival" }]

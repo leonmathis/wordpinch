@@ -230,7 +230,10 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
         <ShareResultDialog
           open={sharing}
           onOpenChange={setSharing}
-          roomCode={ctx.roomCode}
+          title="Share the result"
+          card={`/r/${ctx.roomCode}/card`}
+          filename={`wordpinch-${ctx.roomCode}.png`}
+          link={`${window.location.origin}/r/${ctx.roomCode}`}
           alt={
             tied
               ? `Share card: ${ctx.hostName} and ${ctx.guestName} tied ${ctx.you.score} to ${ctx.them.score}`

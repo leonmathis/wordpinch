@@ -1,3 +1,4 @@
+import { FEATURES } from "../../src/lib/features";
 import { expect, test, type Page } from "@playwright/test";
 import { attachScreenshot, collectConsoleErrors, expectNoErrors, findHorizontalOverflow, settle } from "./helpers";
 
@@ -32,14 +33,15 @@ async function squareClearance(page: Page) {
 }
 
 test.describe("landing", () => {
-  test("renders headline, one mode, join row; no overflow", async ({ page }, testInfo) => {
+  test("renders headline, the enabled modes, join row; no overflow", async ({ page }, testInfo) => {
     const errors = collectConsoleErrors(page);
     await page.goto("/");
     await settle(page);
     await expect(page.locator(".wp-root")).toHaveAttribute("data-phase", "landing");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("one scribbled word");
-    // Flags are off: only "Play a friend" is offered.
-    await expect(page.locator('[data-landing="modes"]:visible button')).toHaveCount(1);
+    // "Play a friend" plus every mode whose feature flag is on.
+    const enabled = 1 + Object.values(FEATURES).filter(Boolean).length;
+    await expect(page.locator('[data-landing="modes"]:visible button')).toHaveCount(enabled);
     await expect(friend(page)).toHaveAccessibleName("Play a friend: new room");
     const join = page.getByRole("button", { name: "Join" });
     await expect(join).toBeDisabled();

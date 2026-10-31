@@ -204,6 +204,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes advance-fill { from { width: 0%; } to { width: 100%; } }
+@keyframes quick-orbit { to { transform: rotate(360deg); } }
 /* F3 reaction bubble: pops in, holds, fades. Ends invisible (fill both). */
 @keyframes fx-bubble {
   0%   { opacity: 0; transform: translateY(6px) rotate(-3deg) scale(0.9); }
@@ -226,6 +227,7 @@
   .shake { animation: shake 200ms ease-in-out; }
   .count-pop { animation: count-pop 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .slide-up-in { animation: slide-up-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .quick-orbit { animation: quick-orbit 9s linear infinite; }
   .fx-bubble { transform: rotate(-3deg); animation: fx-bubble 2800ms ease-out both; }
   /* Dev previews keep the bubble up so it can be measured. */
   .fx-bubble[data-hold] { animation: none; }
@@ -238,6 +240,7 @@
   .typing-dots i {
     animation: none;
   }
+  .quick-orbit { animation: none; }
   /* Still disappears, without moving. */
   .fx-bubble { animation-name: fx-bubble-fade; }
   .fx-bubble[data-hold] { animation: none; }
@@ -262,6 +265,11 @@
   .wp-root[data-phase="race"] { --wp-phase-bg: var(--phase-race); }
   .wp-root[data-phase="result"] { --wp-phase-bg: var(--phase-result); }
   .wp-root[data-phase="matchend"] { --wp-phase-bg: var(--phase-matchend); }
+  /* F6: the daily pinch shares the pick screen's pink. */
+  .wp-root[data-phase="daily"] { --wp-phase-bg: var(--phase-pick); }
+  /* F7: quick match waits on the reveal's blue. */
+  .wp-root[data-phase="quick"] { --wp-phase-bg: var(--phase-reveal); --quick-ring: #3e4a5e; }
+  .dark .wp-root[data-phase="quick"] { --quick-ring: #4a443c; }
   @media (prefers-reduced-motion: reduce) {
     .wp-root { transition: none; }
   }

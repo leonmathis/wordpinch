@@ -55,6 +55,13 @@ const LIMITS: LimitRule[] = [
     windowMs: MINUTE,
   },
   {
+    // F6: start once a day, submit a few tries; GETs are cheap.
+    scope: "daily",
+    match: (p) => p.startsWith("/api/daily"),
+    limit: 60,
+    windowMs: MINUTE,
+  },
+  {
     // Collection page and the match-end banner count (F2).
     scope: "collection-reads",
     match: (p, m) =>

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { findHorizontalOverflow, findLowContrast, findSmallTargets } from "./helpers";
 
@@ -101,7 +102,7 @@ test("match end: share sheet, saved image, link preview", async ({ browser, brow
   // Save image: a real PNG download.
   const [download] = await Promise.all([host.waitForEvent("download"), sheet.getByRole("link", { name: "Save image" }).click()]);
   expect(download.suggestedFilename()).toBe(`wordpinch-${code}.png`);
-  const saved = await download.path().then((p) => require("node:fs").readFileSync(p) as Buffer);
+  const saved = readFileSync(await download.path());
   expect(pngSize(saved)).toEqual({ width: 1080, height: 1350 });
 
   // Share…: headless Chromium has no share sheet, so the link is copied.

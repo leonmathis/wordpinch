@@ -18,6 +18,7 @@ export type CollectedWord = {
   source: "won" | "saved";
   opponent: string | null;
   time_ms: number | null;
+  daily_number: number | null;
   created_at: string;
 };
 
@@ -36,6 +37,8 @@ export async function collectWord(opts: {
   opponent?: string | null;
   timeMs?: number;
   roomCode?: string;
+  /** F6: a daily pinch word, shown as "Daily pinch #128". */
+  dailyNumber?: number;
 }): Promise<boolean | null> {
   const word = opts.word.toLowerCase();
   if (!isUuid(opts.userId) || !WORD_REGEX.test(word)) return null;
@@ -47,6 +50,7 @@ export async function collectWord(opts: {
     p_opponent: opts.opponent ?? null,
     p_time_ms: opts.timeMs ?? null,
     p_room_code: opts.roomCode ?? null,
+    p_daily_number: opts.dailyNumber ?? null,
   });
   // 23503: the seat is not an account (pre-F1 clientId fallback).
   if (error?.code === "23503") return null;
@@ -98,7 +102,7 @@ export async function listCollection(): Promise<CollectedWord[]> {
   const supabase = await supabaseServer();
   const { data, error } = await supabase
     .from("collected_words")
-    .select("word, definitions, source, opponent, time_ms, created_at")
+    .select("word, definitions, source, opponent, time_ms, daily_number, created_at")
     .order("created_at", { ascending: false })
     .limit(1000);
   if (error) throw error;

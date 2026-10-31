@@ -12,6 +12,7 @@ import { Avatar } from "./avatar";
 import { playBuzz } from "@/lib/sound";
 import { PLAYER_REACTIONS } from "@/lib/room-fx";
 import { ReactionBubble, ReactionPills } from "./reactions";
+import { lockedWordInput } from "@/lib/game/word-input";
 
 /** "45" under a minute, "1:30" from 60 s. */
 function formatClock(s: number) {
@@ -24,9 +25,6 @@ function inputFont(length: number) {
   if (length <= 14) return "text-xl lg:text-[26px]";
   return "text-[17px] lg:text-[22px]";
 }
-
-// Hoisted: avoid re-creating the regex on every onChange / submit.
-const NON_ALPHA_REGEX = /[^A-Z]/g;
 
 function useRaceTimer(
   total: number,
@@ -207,18 +205,8 @@ export function RacePhase({ ctx }: { ctx: GameCtx }) {
   }, [val]);
 
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const cleaned = e.target.value.toUpperCase().replace(NON_ALPHA_REGEX, "");
-    let next = cleaned;
-    if (!cleaned.startsWith(A)) {
-      // Letters typed in front of the locked first letter (caret moved to
-      // the start) go right after it, and the caret follows them. Before,
-      // they stayed in front and the word came out as "TOOTHT".
-      // Only for an insertion: a deleted lock letter just comes back.
-      const lock = cleaned.length > val.length ? cleaned.indexOf(A) : -1;
-      const typedBefore = lock > 0 ? lock : 0;
-      next = lock > 0 ? A + cleaned.slice(0, lock) + cleaned.slice(lock + 1) : A + cleaned;
-      if (typedBefore > 0) caretAfterRef.current = typedBefore + 1;
-    }
+    const { value: next, caret } = lockedWordInput(e.target.value, val, A);
+    if (caret !== null) caretAfterRef.current = caret;
     setVal(next);
     // F3: the opponent sees how many letters, never which.
     ctx.fx.typing(next.length);

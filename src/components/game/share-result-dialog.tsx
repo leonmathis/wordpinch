@@ -9,31 +9,36 @@ import { cn } from "@/lib/utils";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  roomCode: string;
+  /** "Share the result" (match) or "Share your pinch" (daily). */
+  title: string;
+  /** The server-drawn PNG; `?download=1` on it saves the file. */
+  card: string;
+  filename: string;
+  /** The link "Share…" sends when the browser can't share the file. */
+  link: string;
   /** Read out instead of the picture ("Leon beat Juno 4 to 3"). */
   alt: string;
 };
 
 /**
- * F5 "Share the result": the match card drawn on the server
- * (`/r/[code]/card`, 1080×1350), with "Save image" and "Share…". Share
- * sends the picture itself where the browser can (phones), else the room
- * link, else copies it.
+ * F5 share sheet: a card drawn on the server (1080×1350) with "Save
+ * image" and "Share…". Share sends the picture itself where the browser
+ * can (phones), else the link, else copies it. The match card (match end)
+ * and the daily card (F6) both use it.
  */
-export function ShareResultDialog({ open, onOpenChange, roomCode, alt }: Props) {
-  // Bust the browser cache per opening: the card follows the room.
+export function ShareResultDialog({ open, onOpenChange, title, card, filename, link, alt }: Props) {
+  // Bust the browser cache per opening: the card follows the game.
   const [stamp] = React.useState(() => Date.now());
-  const src = `/r/${roomCode}/card?v=${stamp}`;
+  const src = `${card}?v=${stamp}`;
   const [failed, setFailed] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-  const link = typeof window === "undefined" ? "" : `${window.location.origin}/r/${roomCode}`;
 
   const share = async () => {
     if (busy) return;
     setBusy(true);
     try {
       const blob = await fetch(src).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))));
-      const file = new File([blob], `wordpinch-${roomCode}.png`, { type: "image/png" });
+      const file = new File([blob], filename, { type: "image/png" });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: "wordpinch", text: alt });
         return;
@@ -58,7 +63,7 @@ export function ShareResultDialog({ open, onOpenChange, roomCode, alt }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent variant="sheet">
         <div className="pr-14">
-          <DialogTitle className="text-2xl leading-none font-extrabold">Share the result</DialogTitle>
+          <DialogTitle className="text-2xl leading-none font-extrabold">{title}</DialogTitle>
           <DialogDescription className="sr-only">{alt}</DialogDescription>
         </div>
 
@@ -83,8 +88,8 @@ export function ShareResultDialog({ open, onOpenChange, roomCode, alt }: Props) 
 
         <div className="grid grid-cols-2 gap-2.5">
           <a
-            href={`/r/${roomCode}/card?download=1`}
-            download={`wordpinch-${roomCode}.png`}
+            href={`${card}?download=1`}
+            download={filename}
             className={cn(buttonVariants({ variant: "pill-soft", size: "pill-lg" }), "bg-row px-4")}
           >
             Save image
