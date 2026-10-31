@@ -55,6 +55,14 @@ const LIMITS: LimitRule[] = [
     windowMs: MINUTE,
   },
   {
+    // Collection page and the match-end banner count (F2).
+    scope: "collection-reads",
+    match: (p, m) =>
+      m === "GET" && (p === "/api/collection" || (p.startsWith("/api/rooms/") && p.endsWith("/collected"))),
+    limit: 60,
+    windowMs: MINUTE,
+  },
+  {
     scope: "room-mutations",
     match: (p, m) => m === "POST" && p.startsWith("/api/rooms/"),
     limit: 180,

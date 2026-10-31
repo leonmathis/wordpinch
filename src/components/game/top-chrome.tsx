@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Bookmark } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { SettingsMenu } from "./settings-menu";
 
 type Props = {
@@ -28,7 +31,8 @@ function pillWidth(total: number) {
 /**
  * Pastel Pop top bar: round label and progress pills on the left (the
  * wordmark outside a match), one settings gear on the right. Theme, sound,
- * share and leave live in the gear's menu.
+ * share and leave live in the gear's menu. Outside a room a bookmark next
+ * to the gear opens the word collection (F2).
  */
 export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, roomCode, over, score }: Props) {
   const inMatch = round > 0 && total > 0;
@@ -39,7 +43,7 @@ export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, room
       {inMatch ? (
         <div className="flex flex-col gap-1.5">
           <div className="text-[13px] font-bold whitespace-nowrap">
-            {over ? `Match over · ${total} rounds` : `Round ${round} of ${total}`}
+            {over ? `Match over · ${total} ${total === 1 ? "round" : "rounds"}` : `Round ${round} of ${total}`}
             {score ? (
               <>
                 {" · "}
@@ -69,7 +73,18 @@ export function TopChrome({ round = 0, total, muted, onToggleMute, onShare, room
           wordpinch
         </Link>
       )}
-      <SettingsMenu roomCode={roomCode} onShare={onShare} muted={muted} onToggleMute={onToggleMute} />
+      <div className="flex items-center gap-2">
+        {!roomCode ? (
+          <Link
+            href="/collection"
+            aria-label="Your word collection"
+            className={cn(buttonVariants({ variant: "pill-soft", size: "circle" }))}
+          >
+            <Bookmark aria-hidden />
+          </Link>
+        ) : null}
+        <SettingsMenu roomCode={roomCode} onShare={onShare} muted={muted} onToggleMute={onToggleMute} />
+      </div>
     </div>
   );
 }

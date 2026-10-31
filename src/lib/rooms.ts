@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase/admin";
 import { initialGameState, type PersistedGameState } from "./game/state";
+import { collectRoundWins } from "./collection";
 
 // 31 unambiguous chars (excludes I, O, 0, 1). 31^4 ≈ 923K codes.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -146,7 +147,11 @@ export async function updateRoomState(opts: {
     if (current.error) throw current.error;
     if (!current.data) return false;
     const currentState = current.data.state as PersistedGameState;
-    if (opts.state.phase === "pick" && currentState.phase === "pick") {
+    if (opts.state.phase === "pick" && currentState.phase === "lobby") {
+      // A match starts: the server's clock marks it, so the match-end
+      // banner can count the words collected since (F2).
+      stateToWrite = { ...opts.state, matchStartedAt: Date.now() };
+    } else if (opts.state.phase === "pick" && currentState.phase === "pick") {
       stateToWrite = {
         ...opts.state,
         pick: {
@@ -158,6 +163,7 @@ export async function updateRoomState(opts: {
     } else if (opts.state.phase === "matchend") {
       stateToWrite = {
         ...opts.state,
+        matchStartedAt: currentState.matchStartedAt,
         scores: currentState.scores,
         usedWords: currentState.usedWords,
         // `rounds` travels with `scores`: both are written by whichever
@@ -912,5 +918,13 @@ export async function resolveRound(opts: {
     const fresh = await getRoomByCode(opts.code);
     return fresh ? { state: fresh.state } : null;
   }
+  // F2: the awarded words go into the players' collections. Only the
+  // resolver that won the write gets here, so each round counts once.
+  await collectRoundWins({
+    code: opts.code,
+    seats: { host: room.host_id, guest: room.guest_id },
+    state: finalState,
+    attempts: room.state.pendingResult.attempts,
+  });
   return { state: finalState };
 }

@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { GameCtx } from "@/lib/game/types";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, Equal, LogOut, Play, RotateCcw, type LucideIcon } from "lucide-react";
+import { ArrowRight, Bookmark, Clock, Equal, LogOut, Play, RotateCcw, type LucideIcon } from "lucide-react";
 import { playDing } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 import { CountUp } from "./count-up";
@@ -46,6 +46,52 @@ function Hero({ icon: Icon, fill, a, b }: { icon: LucideIcon; fill: string; a: s
 /** "2.40 s" from the race start, when the room has one. */
 function raceTime(submittedAt: number, raceStartedAt?: number) {
   return raceStartedAt ? `${((submittedAt - raceStartedAt) / 1000).toFixed(2)} s` : null;
+}
+
+/**
+ * Bookmark beside the pronunciation (F2). The winner's word is already in
+ * their collection, so for them it shows filled from the start; the other
+ * player taps it to keep the word. The server reads the word and its
+ * meaning from the room, the body only names the round.
+ */
+function SaveWordButton({ ctx, iWon }: { ctx: GameCtx; iWon: boolean }) {
+  const [state, setState] = React.useState<"idle" | "saving" | "saved" | "error">(iWon ? "saved" : "idle");
+  const saved = state === "saved";
+  const save = async () => {
+    if (saved || state === "saving") return;
+    if (ctx.collection.preview) {
+      setState("saved");
+      return;
+    }
+    setState("saving");
+    try {
+      const res = await fetch(`/api/rooms/${ctx.roomCode}/save-word`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ round: ctx.round }),
+      });
+      setState(res.ok ? "saved" : "error");
+    } catch {
+      setState("error");
+    }
+  };
+  return (
+    <>
+      <Button
+        variant="pill-soft"
+        size="circle"
+        aria-label={saved ? "In your word collection" : "Save to your word collection"}
+        aria-pressed={saved}
+        aria-busy={state === "saving" || undefined}
+        onClick={save}
+      >
+        <Bookmark fill={saved ? "currentColor" : "none"} strokeWidth={2.2} />
+      </Button>
+      <span role="status" className="text-sm font-semibold text-muted-foreground">
+        {state === "error" ? "Couldn't save, try again" : saved && !iWon ? "Saved" : ""}
+      </span>
+    </>
+  );
 }
 
 function speakFallback(word: string) {
@@ -399,6 +445,7 @@ export function ResultPhase({ ctx }: { ctx: GameCtx }) {
                   >
                     <Play fill="currentColor" />
                   </Button>
+                  {ctx.collection.enabled ? <SaveWordButton ctx={ctx} iWon={iWon} /> : null}
                 </div>
                 <div className="flex flex-col gap-4 rounded-[26px] bg-card px-[18px] py-4">
                   {defs.map((d) => (

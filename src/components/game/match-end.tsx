@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { MoveHorizontal, Zap } from "lucide-react";
+import { ArrowRight, MoveHorizontal, Zap } from "lucide-react";
 import type { GameCtx } from "@/lib/game/types";
 import { matchAwards, type Award } from "@/lib/game/awards";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,44 @@ function AwardCard({ icon, label, award }: { icon: React.ReactNode; label: strin
   );
 }
 
+/**
+ * Words this match added to the player's collection (F2). Counted by the
+ * server, so a word that was already collected before the match doesn't
+ * count as new. Nothing shows until there is at least one.
+ */
+function useNewWords(ctx: GameCtx): number {
+  const { enabled, preview, previewCount } = ctx.collection;
+  const [count, setCount] = React.useState(0);
+  React.useEffect(() => {
+    if (!enabled || preview || !ctx.roomCode) return;
+    let cancelled = false;
+    fetch(`/api/rooms/${ctx.roomCode}/collected`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ count?: number }>) : null))
+      .then((data) => {
+        if (!cancelled && typeof data?.count === "number") setCount(data.count);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, preview, ctx.roomCode]);
+  return preview ? previewCount : count;
+}
+
+function CollectionBanner({ count }: { count: number }) {
+  return (
+    <Link
+      href="/collection"
+      className="flex min-h-11 items-center gap-2 self-start rounded-full bg-shape-sage px-4 py-2.5 text-[15px] font-bold text-[#141414] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <span className="min-w-0">{`${count} new ${count === 1 ? "word" : "words"} in your collection`}</span>
+      <ArrowRight aria-hidden className="size-[18px] shrink-0" />
+    </Link>
+  );
+}
+
 export function MatchEnd({ ctx }: { ctx: GameCtx }) {
+  const newWords = useNewWords(ctx);
   const youWon = ctx.you.score > ctx.them.score;
   const tied = ctx.you.score === ctx.them.score;
   const awards = matchAwards(ctx.used);
@@ -157,6 +194,7 @@ export function MatchEnd({ ctx }: { ctx: GameCtx }) {
               </div>
             ) : null}
 
+            {newWords > 0 ? <CollectionBanner count={newWords} /> : null}
           </div>
 
           <div className="min-w-0 lg:self-start lg:[grid-area:table]">

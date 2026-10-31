@@ -27,7 +27,7 @@ import { ReconnectBanner, RoleErrorBanner } from "./reconnect-banner";
 import { PhaseShell } from "./phase-shell";
 import { SettlingPhase } from "./settling-phase";
 import { TopChrome } from "./top-chrome";
-import { useIdentity } from "@/lib/identity";
+import { useHasAccount, useIdentity } from "@/lib/identity";
 
 /**
  * How long the host must be missing from presence before the guest's client
@@ -60,6 +60,7 @@ export function WordpinchUI({
 }: Props) {
   // Signs in only for a real room; landing and dev previews make no account.
   const clientId = useIdentity(!!roomCode && !preview);
+  const hasAccount = useHasAccount();
   const [storedName] = useStoredString("name");
   const [muted, setMutedStored] = useStoredBool("muted");
   const [shareOpen, setShareOpen] = React.useState(false);
@@ -313,6 +314,15 @@ export function WordpinchUI({
     showReconnect ||
     (!!roomCode && (channelStatus === "reconnecting" || channelStatus === "closed"));
 
+  const collectionEnabled = preview
+    ? preview.as !== "spectator"
+    : hasAccount && (role === "host" || role === "guest");
+  const previewCollected = preview?.collected ?? 0;
+  const collection = React.useMemo(
+    () => ({ enabled: collectionEnabled, preview: !!preview, previewCount: previewCollected }),
+    [collectionEnabled, preview, previewCollected]
+  );
+
   const ctx: GameCtx = React.useMemo(
     () => ({
       phase,
@@ -357,6 +367,7 @@ export function WordpinchUI({
       used: usedWords,
       roundOutcomes,
       roomCode: roomCode ?? "",
+      collection,
       shareOpen,
       reconnectOpen,
       openShare,
@@ -404,6 +415,7 @@ export function WordpinchUI({
       toggleMute,
       sceneKey,
       roomCode,
+      collection,
       openShare,
       closeShare,
       actions,

@@ -140,6 +140,12 @@ export type PersistedGameState = {
     timeMs?: number;
   }[];
   createdAt: number;
+  /**
+   * ms-epoch when the current match left the lobby, stamped by the server
+   * (`updateRoomState`). The match-end banner counts the words collected
+   * since then. Absent before the first match.
+   */
+  matchStartedAt?: number;
 };
 
 /**

@@ -140,6 +140,13 @@ export type GameCtx = {
    */
   roundOutcomes: NonNullable<PersistedGameState["rounds"]>;
   roomCode: string;
+  /**
+   * F2 word collection. `enabled` when this viewer can keep words: a
+   * seated player with an anonymous account (legacy clientId players and
+   * spectators have no collection). In a dev preview nothing is sent;
+   * `previewCount` stands in for the match-end banner's count.
+   */
+  collection: { enabled: boolean; preview: boolean; previewCount: number };
   shareOpen: boolean;
   reconnectOpen: boolean;
   openShare: () => void;

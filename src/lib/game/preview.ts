@@ -25,6 +25,8 @@ export type PreviewOpts = {
   end: "win" | "loss" | "tie";
   /** Match length for phase=matchend (`?rounds=15`). */
   rounds: 7 | 15;
+  /** Match-end collection banner count (`?collected=3`), 0 hides it. */
+  collected: number;
 };
 
 export const RESULT_VARIANTS = [
@@ -147,6 +149,7 @@ export function parsePreview(
     result?: string;
     end?: string;
     rounds?: string;
+    collected?: string;
   }
 ): PreviewOpts | null {
   if (sp.as !== "host" && sp.as !== "guest" && sp.as !== "spectator") return null;
@@ -162,6 +165,7 @@ export function parsePreview(
     result: (RESULT_VARIANTS as readonly string[]).includes(sp.result ?? "") ? (sp.result as ResultVariant) : "win",
     end: sp.end === "loss" || sp.end === "tie" ? sp.end : "win",
     rounds: sp.rounds === "15" ? 15 : 7,
+    collected: Math.max(0, Math.min(99, Number.parseInt(sp.collected ?? "0", 10) || 0)),
   };
 }
 

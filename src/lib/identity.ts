@@ -19,14 +19,15 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 
 const CLIENT_ID_KEY = "wordpinch:v1:client-id";
 
-type Snapshot = { id: string };
+/** `account` is false while signed out and on the clientId fallback. */
+type Snapshot = { id: string; account: boolean };
 
-let snapshot: Snapshot = { id: "" };
+let snapshot: Snapshot = { id: "", account: false };
 let pending: Promise<string> | null = null;
 const listeners = new Set<() => void>();
 
-function publish(id: string) {
-  snapshot = { id };
+function publish(id: string, account: boolean) {
+  snapshot = { id, account };
   for (const l of listeners) l();
 }
 
@@ -61,7 +62,7 @@ async function adoptClientId(clientId: string): Promise<void> {
   }
 }
 
-async function resolveIdentity(): Promise<string> {
+async function resolveIdentity(): Promise<Snapshot> {
   const supabase = supabaseBrowser();
   try {
     const { data } = await supabase.auth.getSession();
@@ -74,10 +75,10 @@ async function resolveIdentity(): Promise<string> {
     if (!userId) throw new Error("no user after anonymous sign-in");
     const legacy = readClientId(false);
     if (legacy && legacy !== userId) await adoptClientId(legacy);
-    return userId;
+    return { id: userId, account: true };
   } catch (err) {
     console.warn("[identity] anonymous sign-in unavailable, using clientId", err);
-    return readClientId(true);
+    return { id: readClientId(true), account: false };
   }
 }
 
@@ -88,8 +89,8 @@ async function resolveIdentity(): Promise<string> {
  */
 export function ensureIdentity(): Promise<string> {
   if (!pending) {
-    pending = resolveIdentity().then((id) => {
-      publish(id);
+    pending = resolveIdentity().then(({ id, account }) => {
+      publish(id, account);
       return id;
     });
   }
@@ -103,6 +104,8 @@ function subscribe(cb: () => void) {
 
 const getSnapshot = () => snapshot.id;
 const getServerSnapshot = () => "";
+const getAccount = () => snapshot.account;
+const getServerAccount = () => false;
 
 /**
  * The caller's id once `ensureIdentity` has resolved, "" before (and on
@@ -115,4 +118,12 @@ export function useIdentity(enabled: boolean): string {
     if (enabled) void ensureIdentity();
   }, [enabled]);
   return id;
+}
+
+/**
+ * True once this browser plays on an anonymous account. Legacy clientId
+ * players have no collection (F2), so the bookmark hides for them.
+ */
+export function useHasAccount(): boolean {
+  return React.useSyncExternalStore(subscribe, getAccount, getServerAccount);
 }

@@ -135,6 +135,7 @@ export const persistedGameStateSchema = z.object({
     )
     .max(1000),
   createdAt: z.number().int().nonnegative(),
+  matchStartedAt: z.number().int().nonnegative().optional(),
   pendingResult: z
     .object({
       attempts: z.array(attemptSchema).min(1).max(10),
