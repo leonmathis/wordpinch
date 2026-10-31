@@ -1,0 +1,180 @@
+# Redesign step 3: mapping the design onto the code
+
+**Inputs:**
+- [01-inventory.md](01-inventory.md): what exists.
+- [02-design-progress.md](02-design-progress.md): rules, tokens, decisions.
+- The canvas: https://claude.ai/artifact/UxU5iL3Whgc5K2tDWkxdqR
+
+**Status:** draft, 31.10.2026, against commit `2cd752e`.
+
+The plan has two parts:
+- **Reskin (R-PRs):** game logic stays unchanged.
+- **New features (F-PRs):** each has its own server work.
+
+Every PR leaves the game playable.
+
+---
+
+## 1. What the codebase gives us (checked 31.10.)
+
+| Area | Today | Source |
+|---|---|---|
+| Fonts | Geist Sans + Geist Mono via `next/font/google` | `src/app/layout.tsx:2,8-16` |
+| Theme | `next-themes`, `attribute="class"`, `defaultTheme="system"`; `themeColor` #ffffff / #0a0a0a | `layout.tsx:28-32,57-61` |
+| Tokens | shadcn neutral oklch values in `:root` and `.dark` | `globals.css:52-121` |
+| Component CSS | ~45 game classes (`wp-*`, `room-code`, `pick-input`, `race-input`, `result-word`, `used-row`, `advance-bar`, `qr`, …) | `globals.css:187-514` |
+| Primitives | shadcn on `@base-ui/react`: alert, button, dialog, input, label, separator, sonner, switch, toggle, toggle-group | `src/components/ui/` |
+| Button variants | default, outline, secondary, ghost, destructive, link; sizes default (h-8), xs, sm, lg (h-9), icon variants up to size-9 | `ui/button.tsx:9-38` |
+| Motion | `motion/react`; reduced-motion handled in some places, with 6 gaps | inventory §2 |
+| Realtime | private room channel. Clients **can only receive broadcasts and track their own presence**; only the server publishes `state` | `use-room-channel.ts:104-110`, migration `20260518000000_lock_realtime_room_channel.sql` |
+| Presence payload | `{ name, role, joinedAt }`, keyed by a per-mount session id. Role is self-reported | `use-room-channel.ts:124-130` |
+| Per-player submit signal | `pendingResult.attempts[].by` (host/guest) | `state-schema.ts:138-140`, `wordpinch-ui.tsx:175-182` |
+| Anonymous auth | `signInAnonymously` exists in the installed `@supabase/auth-js` | `node_modules/@supabase/auth-js/dist/module/GoTrueClient.d.ts` |
+| Next 16 docs to read first | fonts, metadata and OG images, route handlers | `node_modules/next/dist/docs/01-app/01-getting-started/13-fonts.md`, `14-metadata-and-og-images.md`, `15-route-handlers.md` |
+
+---
+
+## 2. Foundations
+
+### Tokens (`src/app/globals.css`)
+- **`:root` and `.dark`:** replace the neutral oklch values with the D tokens from 02 §Tokens. The shadcn names stay so primitives keep working:
+  - `--background`, `--foreground`, `--card` (white / `#2A2621`)
+  - `--muted`, `--muted-foreground`, `--primary` (ink / cream), `--destructive` (`#B3261E` / `#FF8A80`)
+  - `--ring`, `--radius` (pill-first)
+- **New tokens:**
+  - phase backgrounds: `--phase-landing`, `--phase-lobby`, `--phase-pick`, `--phase-reveal`, `--phase-race`, `--phase-result`, `--phase-matchend`, `--phase-daily`, `--phase-quick`, `--phase-pass`
+  - shape fills: `--shape-blue`, `--shape-pink`, `--shape-yellow`, `--shape-sage`, `--shape-magenta`
+  - anchor letters: `--anchor-first`, `--anchor-last`
+  - inner rows: `--row`
+- **Dark mode:** all phase backgrounds resolve to `#1B1915`; shape fills stay pastel.
+- **Phase background:** `.wp-root[data-phase="…"]` sets `background: var(--phase-…)`, with a 260 ms colour transition, none under reduced motion. `wordpinch-ui.tsx` sets `data-phase` on `.wp-root` (line 383).
+
+### Fonts (`src/app/layout.tsx`)
+- Replace Geist with **Urbanist** (500–800) as `--font-sans` and **Gochi Hand** (400) as `--font-hand`. Check `13-fonts.md` for the current `next/font/google` API first.
+- **Geist Mono:** its only remaining use is the room-code input, which becomes Urbanist with letter spacing, so drop it.
+- **`themeColor`:** `#F5F0E3` light, `#1B1915` dark.
+
+### Toasts (`src/components/ui/sonner.tsx`)
+Restyle to ink pills (cream in dark) with the coloured status dot. Keep `richColors` off so the D colours win.
+
+---
+
+## 3. Shared building blocks (new)
+
+All live in `src/components/game/kit/` unless noted. They're shadcn-first: primitives get variants, they aren't re-implemented.
+
+| Building block | What it is | Rules it encodes |
+|---|---|---|
+| `ui/button.tsx` variants | add `variant: pill` (ink), `pill-soft` (white/surface), `circle` (44px icon); sizes `pill-lg` (56px), `pill-md` (44px). Keep the existing variants for anything not yet migrated | 44px minimum touch target |
+| `ui/input.tsx` variant | `pill` (52–60px, surface background, 2px magenta ring when `aria-invalid`) | race input font steps (24 → 19px past 13 letters) via a prop |
+| `ui/switch.tsx` | restyle to 48×28, ink track on, knob light | none |
+| `ui/toggle-group.tsx` | segmented pill (tie behaviour, theme, collection filter) | none |
+| `ui/dialog.tsx` | add `variant: sheet`: bottom sheet below 640px, centred 440px dialog above | none |
+| `Shape` (`square`, `star`, `flower`, `circle`) | inline SVG / div shapes with a fill prop | optical sizing (square 74%, circle 81% of the box); `safeInset` per shape (square 13%, circle 15%, star 30%, flower 22%) |
+| `ShapeGlyph` | Gochi Hand letter inside a `Shape` | per-glyph offset table: T, H, N `padding-top: .16em`; "?" `translate(.02em,.13em)`; correct when ≥5% off. Measure all 26 once with the `measureText` script from 02 |
+| `LetterSlots` | first-letter square + `_ _ _` + last-letter star; replaces `letters-display.tsx` | form = meaning, colour adapts to the phase |
+| `AnchoredWord` | a word with coloured first and last letters | size steps 60 / 48 / 38px by length; `overflow-wrap:anywhere` |
+| `Avatar` (restyle `avatar.tsx`) | pastel circle + Gochi initial | no glyph correction for initials |
+| `TopBar` + `SettingsMenu` | round label + inline score + progress pills + gear menu (room/share, sound, theme, how to play, leave); replaces `top-chrome.tsx` | names truncate, scores never |
+| `StatusPill` | banner pill with icon circle + text + optional action | used by reconnect, role error, opponent away, spectator |
+| `ScoreCard`, `AwardCard`, `Stepper`, `SettingRow` | small composites for result, match end and lobby | no divider lines; spacing only |
+| `KeyboardSpacer` | none (design-only grey block) | real layout: content above the fold; use `interactive-widget=resizes-content` in the viewport meta. Check `layout.tsx` viewport support in the Next 16 docs first |
+
+A dev-only route `src/app/dev/kit/page.tsx` (gated like the phase strip, `NODE_ENV === "development"`) renders every kit component in light and dark. Baseline and regression screenshots come from there.
+
+---
+
+## 4. Screen by screen
+
+Legend:
+- **R:** restyle in place.
+- **RW:** rewrite the render tree, keep the logic.
+- **N:** new file.
+
+| File | Design (canvas row) | Action | Notes |
+|---|---|---|---|
+| `top-chrome.tsx` | D · Menu | RW → `TopBar` + `SettingsMenu` | theme toggle, mute, share and leave move into the menu. The 2px progress bar becomes round pills. The counter moves into the label |
+| `score-hud.tsx` | race/pick top bar | RW | inline score moves into `TopBar`; "Words played" becomes a pill (phone) / card (desktop) |
+| `letters-display.tsx` | everywhere | replace with `LetterSlots` | delete once unused |
+| `landing.tsx` | Step 2 · Landing | RW | mode grid of 4 `Shape` buttons + join row. **Name input removed** (lobby already has `NameEditor`, `lobby.tsx:182-206`, and the "add your name" hint, `lobby.tsx:363-368`). Create errors move under the grid. Daily, Quick and Pass shapes stay behind a feature flag until their F-PR ships |
+| `app/r/[code]/not-found.tsx` | Step 2 · 404 | RW | starburst 404 + `TopBar` |
+| `lobby.tsx` | Step 2 · Lobby | R | settings in 3 cards (Game / Rules / Sound), no dividers; `NumberStepper` → `Stepper` (44px); guest view dimmed with "only {host} can change these"; New rows (no repeat, peek) added in F4 |
+| `pick-phase.tsx` | Step 2 · Pick | RW | single-letter input → **alphabet grid** (`role=radiogroup`). Typing a letter on a physical keyboard still selects it (keep a keydown handler); Enter locks. Locked state, "Change letter" and the 45s skip card keep their logic (`pick-phase.tsx:23,135-178`) |
+| `reveal-phase.tsx` | Step 2 · Reveal | RW | flower per beat (yellow/pink/sage), GO starburst, letters view with min-length line; **fix**: the inline fade-up has no reduced-motion guard (`reveal-phase.tsx:86`) |
+| `settling-phase.tsx` | Step 2 · Settling | R | three bobbing shapes + word reminder |
+| `race-phase.tsx` | Step 2 · Race | R | timer circle (m:ss ≥60s, magenta ≤5s), pill input with font steps, reject ring + existing 9 messages, opponent row (3 states). Reactions, peek and the letter count arrive in F3/F4 |
+| `result-phase.tsx` | Step 2 · Round result | RW | title pill (8 variants, logic unchanged `:305-320`), `AnchoredWord`, definition card, side-by-side cards, empty-state hero shapes, suggestion pills, `ScoreCard` + "+1", advance bar + Next; **fix**: side-by-side stagger ignores reduced motion (`:356`) |
+| `match-end.tsx` + `rounds-table.tsx` | Step 2 · Match end | RW | score flowers, awards (pure function over `used[]`: fastest = min `timeMs`, longest = max length), table with stripes and no dividers, truncation rules; button states unchanged (`match-end.tsx:121-139`) |
+| `spectator-phase.tsx` | Step 2 · Spectator | RW | banner in normal flow (drop `top-[60px]` / `pt-[120px]`, `:31,323`); **fix**: per-player status from `pendingResult.attempts[].by` + presence instead of the hard-coded "typing" (`:214,225`); **fix**: winner-first match-end order (`:283-295`) |
+| `opponent-away.tsx` | race/reveal/pick | R → `StatusPill` | copy unchanged |
+| `reconnect-banner.tsx` | Step 2 · Overlays | R → `StatusPill` | **fix**: spinner has no reduced-motion guard (`:59`) |
+| `share-dialog.tsx` | Step 2 · Overlays | R | `Dialog variant=sheet`; QR in a yellow card; copy → check state |
+| `qr.tsx` | Step 2 · Overlays | keep | stays black on white for scanning |
+| `avatar.tsx` | everywhere | R | pastel seat colours |
+| `count-up.tsx`, `phase-shell.tsx` | none | keep | phase-shell keeps the transition timing |
+| `wordpinch-ui.tsx` | none | small | `data-phase` on `.wp-root`; `TopBar` instead of `TopChrome`; no logic changes |
+| `globals.css` component classes | none | delete as each screen migrates | grep for each class before deleting; `.used-row` subgrid needs multi-row verification (AGENTS.md) |
+
+---
+
+## 5. New features: where they touch the code
+
+| Feature | Client | Server / data | Notes |
+|---|---|---|---|
+| **F1 Identity** (anonymous accounts) | sign in anonymously on first visit; keep the `clientId` until migrated | Supabase anonymous auth (`signInAnonymously` present in installed auth-js); migration linking `clientId` → `auth.uid()` for room seats (`supabase/migrations/*dual_auth*`); RLS review | read the current Supabase docs before building; check anonymous sign-in rate limits |
+| **F2 Collection** | bookmark on the result screen, collection page, match-end banner | table `collected_words (user_id, word, defs, source, time_ms, created_at)` + RLS; route handler | needs F1 |
+| **F3 Reactions, cheers, letter count** | reaction pills (race), cheers (spectator), "Juno · 4 letters" | **no new server route needed:** clients may update their own **presence payload** (policy `extension = 'presence'`). Add `{ reaction?, reactionAt?, typedLen? }` to the tracked payload | presence role is self-reported, so these stay purely cosmetic; throttle `typedLen` updates (e.g. 4/s); never send the typed text |
+| **F4 No repeat letters + peek** | lobby rows (New tag), pick stripes, race peek pill | `state-schema.ts` settings `noRepeat`, `peek` (+ defaults); enforce no-repeat in `lockPlayerLetter` (`rooms.ts:347`); peek as a new server action that reveals one letter of a valid word for that round and marks it used | server-authoritative; quick match presets peek on |
+| **F5 Share image** | "Share the result" / "Share my pinch" sheet, Save image | `app/r/[code]/opengraph-image.tsx` + a download route via `ImageResponse` | read `14-metadata-and-og-images.md` first; fonts must be loaded for the image renderer |
+| **F6 Daily pinch** | `/daily` route: countdown → letters + clock → result, streak, leaderboard | tables `daily_puzzles`, `daily_attempts (user_id unique per day)`; server issues the start time at reveal and computes the duration; leaderboard query | needs F1; the clock starts at the reveal (decision 1) |
+| **F7 Quick match** | search / matched / nobody screens | matchmaking queue (table + server function pairing two waiting users) → `createRoom` with fixed rules (5 × 30s, min 4, replay ties, no slang, peek on) | needs F1 for fairness; 60s timeout |
+| **F8 Pass the phone** | `/pass` route: setup, handoff cover, turns | **no room, no realtime:** a local state machine reusing `/api/words/validate` | new rule: turns, fastest valid time wins; times hidden until both played |
+
+---
+
+## 6. Order of work (each line is one PR)
+
+**Before R1:** take baseline screenshots of every phase via the dev phase strip (`/r/slate-9f?phase=…`, `?reconnect=1`) at 390px and 1280px, light and dark. Commit them under `docs/redesign/baseline/`, or keep them local if they're too large.
+
+| PR | Contents | Depends on |
+|---|---|---|
+| R1 | tokens, fonts, `themeColor`, `data-phase` background, toasts | none |
+| R2 | kit: button/input/switch/toggle-group/dialog variants, `Shape`, `ShapeGlyph` (with measured table), `LetterSlots`, `AnchoredWord`, `Avatar`, `StatusPill`, `/dev/kit` page | R1 |
+| R3 | `TopBar` + `SettingsMenu`, banners (reconnect, role error, opponent away), share sheet | R2 |
+| R4 | landing (mode grid, extra modes flagged off) + 404 | R2 |
+| R5 | lobby | R2 |
+| R6 | pick (alphabet grid + keyboard) | R2 |
+| R7 | reveal + settling + race | R2 |
+| R8 | round result | R2 |
+| R9 | match end + rounds table + awards | R2 |
+| R10 | spectator (+ the two bug fixes) and removal of dead CSS classes | R3–R9 |
+| F1 → F2 | identity, then collection | R10 |
+| F3 | reactions, cheers, letter count | R7 |
+| F4 | no repeat letters + peek | R5, R6, R7 |
+| F5 | share image | R9 |
+| F6 | daily pinch | F1, F5 |
+| F7 | quick match | F1 |
+| F8 | pass the phone | R6, R7 |
+
+R5–R9 only depend on R2 and touch separate files, so they can run in parallel.
+
+---
+
+## 7. Checklist for every PR
+
+- [ ] `npx tsc --noEmit`, `npm run lint`, `npm run build` pass (AGENTS.md).
+- [ ] Screenshots at 390 and 1280px, light and dark, compared against the canvas artboard and the baseline.
+- [ ] **Overflow check:** run the overflow script from step 2 (`scratchpad/render`, to be moved into `scripts/` with R2) on the changed screens with the stress data (32-char names, 19-letter word, 3.5, 300s).
+- [ ] **Shapes:** text inside shapes ≥12px from the real outline (shape clearance script); glyphs use `ShapeGlyph`.
+- [ ] `prefers-reduced-motion` honoured for every new animation.
+- [ ] **Contrast:** body text ≥4.5:1, large text ≥3:1 (anchor colours on pastels are large-text only).
+- [ ] **Touch and keyboard:** targets ≥44px; keyboard reachable; `aria-*` as in the artboards.
+- [ ] **Conventions:** no `&&` rendering of numbers, phase reset via `key`, no `setState` in effects (AGENTS.md conventions).
+
+---
+
+## 8. Open points for the implementation start
+
+1. **Feature flags:** add a tiny `src/lib/features.ts` (const map) so the landing shapes for daily, quick and pass can ship hidden with R4. Decide whether flags may also be switched by env var.
+2. **Baseline screenshots:** commit them, or keep them local only?
+3. **`.claude/launch.json`:** keep only the `wordpinch-dev` entry (the design-scratch entry points at a session temp folder) and commit it, or leave it untracked.
