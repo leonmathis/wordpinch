@@ -12,12 +12,17 @@ const toggleVariants = cva(
       variant: {
         default: "bg-transparent",
         outline: "border border-input bg-transparent hover:bg-muted",
+        // Pastel Pop segmented control item; the group supplies the track.
+        segment:
+          "flex-1 rounded-full bg-transparent font-bold hover:bg-transparent aria-pressed:bg-primary aria-pressed:text-primary-foreground",
       },
       size: {
         default:
           "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         sm: "h-7 min-w-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-9 min-w-9 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        // 44px, not the 38px of the canvas: the checklist's touch-target rule.
+        segment: "h-11 min-w-11 px-4 text-sm",
       },
     },
     defaultVariants: {

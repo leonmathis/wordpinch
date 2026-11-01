@@ -2,19 +2,21 @@
 
 import * as React from "react";
 import QRCode from "qrcode";
+import { cn } from "@/lib/utils";
 
 type Props = {
   /** URL or text to encode. */
   value: string;
   /** Pixel size of the rendered QR (square). */
   size?: number;
+  className?: string;
 };
 
 /**
  * Real QR code rendered to canvas via the `qrcode` library.
  * Monochrome — uses current theme tokens for fg/bg.
  */
-export function QR({ value, size = 140 }: Props) {
+export function QR({ value, size = 140, className }: Props) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   React.useEffect(() => {
@@ -43,8 +45,7 @@ export function QR({ value, size = 140 }: Props) {
       width={size}
       height={size}
       role="img"
-      className="mx-auto block rounded-[6px]"
-      style={{ marginTop: 18 }}
+      className={cn("mx-auto mt-[18px] block rounded-[6px]", className)}
       aria-label={`QR code linking to ${value}`}
     />
   );

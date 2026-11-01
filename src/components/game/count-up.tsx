@@ -21,7 +21,10 @@ type Props = {
  */
 export function CountUp({ from, to, duration = 800 }: Props) {
   const reduce = useReducedMotion();
-  const [display, setDisplay] = React.useState(reduce ? to : from);
+  // Always `from` on the first render: `useReducedMotion()` is null on the
+  // server and true on a reduced-motion client, so seeding from it broke
+  // hydration ("2" vs "3") when the result phase was server-rendered.
+  const [display, setDisplay] = React.useState(from);
 
   React.useEffect(() => {
     if (from === to) return;

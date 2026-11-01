@@ -52,6 +52,8 @@ export const settingsSchema = z.object({
   // existed (legacy rooms) still validate on the next /state POST.
   // The default is also what `initialGameState` writes for new rooms.
   lengthBonus: z.boolean().default(false),
+  noRepeat: z.boolean().default(false),
+  peek: z.boolean().default(false),
 });
 
 /** Any subset of settings — the body shape of the settings patch endpoint. */
@@ -135,6 +137,14 @@ export const persistedGameStateSchema = z.object({
     )
     .max(1000),
   createdAt: z.number().int().nonnegative(),
+  matchStartedAt: z.number().int().nonnegative().optional(),
+  usedLetters: z
+    .array(z.object({ round: z.number().int().min(0).max(1000), letters: z.array(LETTER).max(2) }))
+    .max(1000)
+    .optional(),
+  peeks: z
+    .object({ host: z.number().int().min(0).max(1000).optional(), guest: z.number().int().min(0).max(1000).optional() })
+    .optional(),
   pendingResult: z
     .object({
       attempts: z.array(attemptSchema).min(1).max(10),

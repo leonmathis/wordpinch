@@ -97,6 +97,11 @@ export type RoomActions = {
    * roll its optimistic "Locked" state back on failure.
    */
   lockMyLetter: (letter: string) => Promise<boolean>;
+  /**
+   * F4: this player's peek for the round. Resolves to the revealed letter,
+   * or to why there is none ("used", "no_word", or "failed" after a toast).
+   */
+  peek: () => Promise<{ letter: string } | { error: "used" | "no_word" | "failed" }>;
   /** Referee-only: advance from reveal to race (also stamps raceStartedAt). */
   advanceToRace: () => Promise<void>;
   /**
@@ -224,6 +229,28 @@ export function useRoomActions(opts: {
       }
     };
 
+    const peek: RoomActions["peek"] = async () => {
+      if (!canPlay) return { error: "failed" };
+      try {
+        const res = await fetch(`/api/rooms/${code}/peek`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { letter?: string };
+          return data.letter ? { letter: data.letter } : { error: "failed" };
+        }
+        const err = ((await res.clone().json().catch(() => ({}))) as { error?: string }).error;
+        if (err === "used" || err === "no_word") return { error: err };
+        await reportFailure(res, "peek");
+        return { error: "failed" };
+      } catch (err) {
+        reportNetworkError("peek", err);
+        return { error: "failed" };
+      }
+    };
+
     const renameMe = async (name: string) => {
       if (!canPlay) return;
       const trimmed = name.trim().slice(0, 32);
@@ -328,6 +355,7 @@ export function useRoomActions(opts: {
       },
 
       lockMyLetter,
+      peek,
 
       advanceToRace: async () => {
         if (!isReferee || !state) return;

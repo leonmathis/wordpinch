@@ -2,49 +2,38 @@
 
 import { Fragment } from "react";
 import type { GameCtx, UsedWord } from "@/lib/game/types";
-import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { Avatar } from "./avatar";
 
 /**
  * One cell in the round-summary grid: a player's word + their time (if
- * available). The winner of the round renders at full opacity; the
- * loser (or empty slot) renders dimmed. Pre-formatted secs in tabular
- * mono so the column stays aligned.
+ * available). The slower (or empty) side steps back in muted ink rather
+ * than opacity, so its text keeps ≥4.5:1.
  */
-function PlayerCell({
-  entry,
-  dim,
-}: {
-  entry: UsedWord | undefined;
-  dim: boolean;
-}) {
+function PlayerCell({ entry, dim }: { entry: UsedWord | undefined; dim: boolean }) {
   if (!entry) {
-    return (
-      <div className="self-center" style={{ padding: "10px 12px" }}>
-        <span className="text-muted-foreground">—</span>
-      </div>
-    );
+    return <span className="text-[15px] font-semibold text-muted-foreground">—</span>;
   }
-  const secs =
-    entry.timeMs !== undefined ? (entry.timeMs / 1000).toFixed(1) : null;
+  const secs = entry.timeMs !== undefined ? `${(entry.timeMs / 1000).toFixed(1)} s` : null;
   return (
-    <div
-      className="self-center flex items-baseline gap-2 min-w-0"
-      style={{ padding: "10px 12px", opacity: dim ? 0.55 : 1 }}
-    >
-      <span className="word truncate">{entry.word}</span>
-      {secs !== null ? (
-        <span className="text-muted-foreground tabular-nums text-[12px]">
-          {secs}s
-        </span>
-      ) : null}
-    </div>
+    <span className="flex min-w-0 items-baseline gap-1.5">
+      <span
+        className={cn(
+          "min-w-0 truncate text-[15px] uppercase",
+          dim ? "font-semibold text-muted-foreground" : "font-extrabold"
+        )}
+      >
+        {entry.word}
+      </span>
+      {secs ? <span className="shrink-0 text-xs font-semibold text-muted-foreground tabular-nums">{secs}</span> : null}
+    </span>
   );
 }
 
 /**
  * Per-round match summary: viewer's own attempts on the left, opponent's on
- * the right, one row per round however that round ended.
+ * the right, one row per round however that round ended. Rows alternate
+ * with a light stripe; no divider lines.
  *
  * Shared by the player and spectator match-end screens — spectators used to
  * get a bare "X wins" with no way to see what was actually played.
@@ -53,33 +42,22 @@ export function RoundsTable({ ctx }: { ctx: GameCtx }) {
   // Spectators hold no seat; they read the board from the host's side.
   const yourSide: "host" | "guest" = ctx.mySide ?? "host";
   const theirSide: "host" | "guest" = yourSide === "host" ? "guest" : "host";
+  const nameOf = (side: "host" | "guest") => (side === yourSide ? ctx.you.name : ctx.them.name);
+  const cols = "grid grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2.5";
 
   return (
-    <div
-      className="font-mono w-full"
-      style={{
-        fontSize: 13,
-        display: "grid",
-        gridTemplateColumns: "auto 1fr 1fr",
-        columnGap: 12,
-      }}
-    >
-      <Separator className="col-span-3" />
-      <div
-        className="meta text-muted-foreground"
-        style={{ padding: "10px 12px 6px" }}
-      >
-        &nbsp;
+    <div className="min-w-0 rounded-[28px] bg-card px-4 pt-4 pb-2.5" role="table" aria-label="Rounds">
+      <div role="row" className={cn(cols, "pb-2.5 text-sm font-extrabold")}>
+        <span role="columnheader" className="text-center text-muted-foreground">
+          #
+        </span>
+        {[yourSide, theirSide].map((side) => (
+          <span role="columnheader" key={side} className="flex min-w-0 items-center gap-2">
+            <Avatar name={nameOf(side)} size={26} side={side} />
+            <span className="truncate">{nameOf(side)}</span>
+          </span>
+        ))}
       </div>
-      <div className="flex items-center gap-2" style={{ padding: "10px 12px 6px" }}>
-        <Avatar name={ctx.you.name} size={18} side={yourSide} />
-        <span className="text-muted-foreground">{ctx.you.name}</span>
-      </div>
-      <div className="flex items-center gap-2" style={{ padding: "10px 12px 6px" }}>
-        <Avatar name={ctx.them.name} size={18} side={theirSide} />
-        <span className="text-muted-foreground">{ctx.them.name}</span>
-      </div>
-      <Separator className="col-span-3" />
       {Array.from({ length: ctx.total }, (_, i) => i + 1).map((r) => {
         const entries = ctx.used.filter((u) => u.round === r);
         // Match on the *side*, not the display name — two players who pick
@@ -93,51 +71,45 @@ export function RoundsTable({ ctx }: { ctx: GameCtx }) {
         const outcomeLabel =
           entries.length > 0
             ? null
-            : outcome?.reason === "forfeit"
-            ? `${
-                outcome.winner === yourSide ? ctx.you.name : ctx.them.name
-              } won — opponent left`
-            : outcome?.reason === "timeout"
-            ? outcome.winner === "split"
-              ? "Out of time — both scored"
-              : "Out of time — nobody scored"
-            : outcome
-            ? "No word played"
-            : null;
-        // Highlight whichever entry was first (lower timeMs) — that's the
-        // round winner. Solo wins still set the winner's time; late-arriving
-        // near-misses also carry a time so we can rank.
+            : outcome?.reason === "forfeit" && (outcome.winner === "host" || outcome.winner === "guest")
+              ? `${nameOf(outcome.winner)} won, ${nameOf(outcome.winner === "host" ? "guest" : "host")} left the round`
+              : outcome?.reason === "timeout"
+                ? outcome.winner === "split"
+                  ? "out of time, both scored"
+                  : "out of time, nobody scored"
+                : outcome
+                  ? "no word played"
+                  : null;
+        // Whichever entry was first (lower timeMs) won the round; the other
+        // steps back. Late near-misses carry a time too, so they rank.
         const yourTime = yourEntry?.timeMs;
         const theirTime = theirEntry?.timeMs;
-        const yourFirst =
-          yourTime !== undefined &&
-          (theirTime === undefined || yourTime < theirTime);
-        const theirFirst =
-          theirTime !== undefined &&
-          (yourTime === undefined || theirTime < yourTime);
+        const yourFirst = yourTime !== undefined && (theirTime === undefined || yourTime < theirTime);
+        const theirFirst = theirTime !== undefined && (yourTime === undefined || theirTime < yourTime);
         return (
-          <Fragment key={r}>
-            <div
-              className="meta text-muted-foreground self-center"
-              style={{ padding: "10px 0 10px 12px" }}
-            >
-              Rd {r}
-            </div>
+          <div
+            role="row"
+            key={r}
+            className={cn(cols, "min-h-10 rounded-[14px] py-1", r % 2 === 0 && "bg-row")}
+          >
+            <span role="rowheader" className="text-center text-[13px] font-bold text-muted-foreground">
+              {r}
+            </span>
             {outcomeLabel ? (
-              <div
-                className="col-span-2 self-center text-muted-foreground"
-                style={{ padding: "10px 12px" }}
-              >
+              <span role="cell" className="col-span-2 font-hand text-[19px] leading-tight text-muted-foreground">
                 {outcomeLabel}
-              </div>
+              </span>
             ) : (
-              <>
-                <PlayerCell entry={yourEntry} dim={!yourFirst && theirFirst} />
-                <PlayerCell entry={theirEntry} dim={!theirFirst && yourFirst} />
-              </>
+              <Fragment>
+                <span role="cell" className="min-w-0">
+                  <PlayerCell entry={yourEntry} dim={!yourFirst && theirFirst} />
+                </span>
+                <span role="cell" className="min-w-0">
+                  <PlayerCell entry={theirEntry} dim={!theirFirst && yourFirst} />
+                </span>
+              </Fragment>
             )}
-            <Separator className="col-span-3" />
-          </Fragment>
+          </div>
         );
       })}
     </div>

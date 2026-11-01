@@ -24,7 +24,7 @@ function ToggleGroup({
   className,
   variant,
   size,
-  spacing = 0,
+  spacing: spacingProp,
   orientation = "horizontal",
   children,
   ...props
@@ -33,6 +33,8 @@ function ToggleGroup({
     spacing?: number
     orientation?: "horizontal" | "vertical"
   }) {
+  // Segments need a gap: at spacing 0 the items get square inner corners.
+  const spacing = spacingProp ?? (variant === "segment" ? 1 : 0)
   return (
     <ToggleGroupPrimitive
       data-slot="toggle-group"
@@ -42,7 +44,7 @@ function ToggleGroup({
       data-orientation={orientation}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
-        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-vertical:flex-col data-vertical:items-stretch",
+        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-vertical:flex-col data-vertical:items-stretch data-[variant=segment]:rounded-full data-[variant=segment]:bg-row data-[variant=segment]:p-1",
         className
       )}
       {...props}

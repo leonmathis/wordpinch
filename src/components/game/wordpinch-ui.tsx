@@ -4,11 +4,11 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import type { GameCtx, GamePhase } from "@/lib/game/types";
 import type { PersistedGameState } from "@/lib/game/state";
+import { previewState, type PreviewOpts } from "@/lib/game/preview";
 import type { UsedWord } from "@/lib/game/types";
 import { useRoomActions } from "@/lib/game/actions";
 import {
   useStoredBool,
-  useClientId,
   useStoredString,
   useSustained,
 } from "@/lib/hooks";
@@ -27,6 +27,9 @@ import { ReconnectBanner, RoleErrorBanner } from "./reconnect-banner";
 import { PhaseShell } from "./phase-shell";
 import { SettlingPhase } from "./settling-phase";
 import { TopChrome } from "./top-chrome";
+import { useHasAccount, useIdentity } from "@/lib/identity";
+import { REACTIONS, useRoomFx } from "@/lib/room-fx";
+import { blockedLetters } from "@/lib/game/rules";
 
 /**
  * How long the host must be missing from presence before the guest's client
@@ -46,6 +49,8 @@ type Props = {
   roomCode?: string;
   initialState?: PersistedGameState | null;
   showReconnect?: boolean;
+  /** Dev-only: seat and state without any network (`lib/game/preview.ts`). */
+  preview?: PreviewOpts;
 };
 
 export function WordpinchUI({
@@ -53,8 +58,11 @@ export function WordpinchUI({
   roomCode,
   initialState = null,
   showReconnect = false,
+  preview,
 }: Props) {
-  const clientId = useClientId();
+  // Signs in only for a real room; landing and dev previews make no account.
+  const clientId = useIdentity(!!roomCode && !preview);
+  const hasAccount = useHasAccount();
   const [storedName] = useStoredString("name");
   const [muted, setMutedStored] = useStoredBool("muted");
   const [shareOpen, setShareOpen] = React.useState(false);
@@ -65,12 +73,19 @@ export function WordpinchUI({
   // result view (with their near-miss attempt) the first time the result
   // screen appears — not a brief "you lost" before the near-miss
   // broadcast/response lands.
-  const [submitInFlight, setSubmitInFlight] = React.useState(false);
+  const [submitInFlight, setSubmitInFlightRaw] = React.useState(false);
+  // The word behind the settling screen's "You played …", kept from the
+  // submit until the server's pendingResult carries it.
+  const [submittedWord, setSubmittedWord] = React.useState<string | null>(null);
+  const setSubmitInFlight = React.useCallback((b: boolean, word?: string) => {
+    setSubmitInFlightRaw(b);
+    if (word) setSubmittedWord(word);
+  }, []);
 
   // Resolve role (host / guest / spectator) before anything else. While
   // resolving, treat the caller as "not the host" so we don't briefly show
   // host-only UI (Start, settings edit, etc.) to a joining guest.
-  const channelCode = roomCode && clientId ? roomCode : null;
+  const channelCode = roomCode && clientId && !preview ? roomCode : null;
   // `useMyRole` needs to apply the post-join state to `liveState`, but
   // `applyState` itself comes from `useRoomChannel` which is called
   // *after* `useMyRole`. Bridge via a ref + stable wrapper: the wrapper
@@ -84,12 +99,14 @@ export function WordpinchUI({
     },
     []
   );
-  const { role, failed: roleFailed, retry: retryRole } = useMyRole({
+  const { role: resolvedRole, failed: roleFailed, retry: retryRole } = useMyRole({
     code: channelCode,
     clientId,
     name: storedName,
     applyState: applyStateBridge,
   });
+  const role = preview?.as ?? resolvedRole;
+  const previewSeed = React.useMemo(() => (preview ? previewState(preview) : null), [preview]);
 
   const {
     state: liveState,
@@ -102,7 +119,7 @@ export function WordpinchUI({
     clientId: clientId || "00000000-0000-0000-0000-000000000000",
     name: storedName.trim() || undefined,
     role: role ?? undefined,
-    initialState,
+    initialState: previewSeed ?? initialState,
   });
 
   // Populate the bridge ref so `applyStateBridge` (passed to
@@ -120,7 +137,9 @@ export function WordpinchUI({
   // opponent so the value is locked true for them.
   const opponentRole =
     role === "host" ? "guest" : role === "guest" ? "host" : null;
-  const opponentOnline = !opponentRole
+  const opponentOnline = preview
+    ? !preview.away
+    : !opponentRole
     ? true
     : !presenceReady
     ? true
@@ -182,8 +201,25 @@ export function WordpinchUI({
     ? liveState?.pendingResult?.attempts.some((a) => a.by === opponentRole) ??
       false
     : false;
+  const seats = React.useMemo(() => {
+    const submitted = (side: "host" | "guest") =>
+      liveState?.pendingResult?.attempts.some((a) => a.by === side) ?? false;
+    const online = (side: "host" | "guest") =>
+      preview
+        ? !(preview.away && side === "guest")
+        : !presenceReady || presence.some((m) => m.role === side);
+    return {
+      host: { online: online("host"), submitted: submitted("host") },
+      guest: { online: online("guest"), submitted: submitted("guest") },
+    };
+  }, [liveState?.pendingResult, preview, presenceReady, presence]);
+  const watchers = preview ? 3 : presenceReady ? presence.length : null;
   const isSettling =
     submitInFlight || (myAttemptInPending && phase === "race");
+  const settlingWord =
+    (myRoleForSettling
+      ? liveState?.pendingResult?.attempts.find((a) => a.by === myRoleForSettling)?.word
+      : undefined) ?? submittedWord ?? undefined;
 
   // On the landing page (no roomCode, phase === 'landing') there's no
   // active match, so the round counter should be 0 — not the MOCK
@@ -280,6 +316,57 @@ export function WordpinchUI({
     showReconnect ||
     (!!roomCode && (channelStatus === "reconnecting" || channelStatus === "closed"));
 
+  const collectionEnabled = preview
+    ? preview.as !== "spectator"
+    : hasAccount && (role === "host" || role === "guest");
+  const previewCollected = preview?.collected ?? 0;
+  const collection = React.useMemo(
+    () => ({ enabled: collectionEnabled, preview: !!preview, previewCount: previewCollected }),
+    [collectionEnabled, preview, previewCollected]
+  );
+
+  // F3: reactions and letter counts ride their own topic (lib/room-fx.ts).
+  const roomFx = useRoomFx(channelCode, role ?? null);
+  const fxRound = round;
+  const { typing: fxTyping, react: fxReact, typed: fxTyped, incoming: fxIncoming } = roomFx;
+  // Previews have no channel: a fixed reaction and count stand in.
+  const [previewAt] = React.useState(() => Date.now());
+  const previewRx = preview?.rx ?? null;
+  const previewTyped = preview?.typed ?? null;
+  const previewOpp = role === "guest" ? "host" : "guest";
+  const fx = React.useMemo(() => {
+    if (preview) {
+      const from = previewRx && REACTIONS[previewRx].by === "spectator" ? "spectator" : previewOpp;
+      return {
+        incoming: previewRx ? { id: previewRx, from, at: previewAt } : null,
+        lens: {
+          host: previewOpp === "host" ? previewTyped : null,
+          guest: previewOpp === "guest" ? previewTyped : null,
+        },
+        react: () => {},
+        typing: () => {},
+      } as GameCtx["fx"];
+    }
+    const len = (seat: "host" | "guest") => (fxTyped[seat]?.round === fxRound ? fxTyped[seat]!.len : null);
+    return {
+      incoming: fxIncoming,
+      lens: { host: len("host"), guest: len("guest") },
+      react: fxReact,
+      typing: (n: number) => fxTyping(fxRound, n),
+    };
+  }, [preview, previewRx, previewTyped, previewOpp, previewAt, fxIncoming, fxTyped, fxRound, fxReact, fxTyping]);
+
+  // F4: derived from server-owned fields, so every screen agrees.
+  const liveUsedLetters = liveState?.usedLetters;
+  const blocked = React.useMemo(
+    () => blockedLetters({ settings, round, usedLetters: liveUsedLetters }),
+    [settings, round, liveUsedLetters]
+  );
+  const mySeat = role === "host" || role === "guest" ? role : null;
+  const spentRound = mySeat ? (liveState?.peeks?.[mySeat] ?? null) : null;
+  const peekOn = !!settings.peek;
+  const peek = React.useMemo(() => ({ on: peekOn, spentRound }), [peekOn, spentRound]);
+
   const ctx: GameCtx = React.useMemo(
     () => ({
       phase,
@@ -319,9 +406,15 @@ export function WordpinchUI({
       guestPresent,
       opponentOnline,
       opponentSubmitted,
+      seats,
+      watchers,
       used: usedWords,
       roundOutcomes,
       roomCode: roomCode ?? "",
+      collection,
+      blocked,
+      peek,
+      fx,
       shareOpen,
       reconnectOpen,
       openShare,
@@ -358,6 +451,8 @@ export function WordpinchUI({
       guestPresent,
       opponentOnline,
       opponentSubmitted,
+      seats,
+      watchers,
       canReferee,
       usedWords,
       roundOutcomes,
@@ -367,20 +462,24 @@ export function WordpinchUI({
       toggleMute,
       sceneKey,
       roomCode,
+      collection,
+      blocked,
+      peek,
+      fx,
       openShare,
       closeShare,
       actions,
+      setSubmitInFlight,
     ]
   );
 
   const showShare = shareOpen && phase !== "landing";
-  // Hidden in the lobby, which carries its own labelled "Share link" button
-  // — two identical share icons a few pixels apart read as a bug, not a
-  // choice.
-  const showChromeShare = phase !== "landing" && phase !== "lobby";
+  // Picks the phase background in globals.css. Settling reads as part of
+  // the race, so it keeps the race colour.
+  const backgroundPhase = isSettling ? "race" : phase;
 
   return (
-    <div className="wp-root" data-room={ctx.roomCode}>
+    <div className="wp-root" data-room={ctx.roomCode} data-phase={backgroundPhase}>
       {/* Status banners live in normal flow above the phase, so they clear
        *  the top chrome and shrink the body instead of covering either.
        *  `roleFailed`: role resolution failed (offline, 5xx, rate limit) —
@@ -393,18 +492,29 @@ export function WordpinchUI({
         </div>
       ) : null}
 
-      {/* Persistent across phase transitions so the progress bar + theme/
-       *  mute/share icons don't flicker out during the AnimatePresence
-       *  exit-then-enter window. Visibility props are derived from the
-       *  current phase + role. */}
+      {/* Persistent across phase transitions so the round pills and the
+       *  settings gear don't flicker out during the AnimatePresence
+       *  exit-then-enter window. */}
       <TopChrome
         round={ctx.round}
         total={ctx.total}
         muted={ctx.muted}
         onToggleMute={ctx.toggleMute}
         onShare={ctx.openShare}
-        showShare={showChromeShare}
-        showLeave={!!roomCode && phase !== "landing"}
+        roomCode={roomCode && phase !== "landing" ? ctx.roomCode : undefined}
+        over={phase === "matchend"}
+        // Phases already on the redesign carry the score in the top bar;
+        // result and match end show it in the page.
+        score={
+          phase === "pick" ||
+          phase === "reveal" ||
+          phase === "race" ||
+          // Spectators have no score cards outside the result, but the
+          // bar carries it there too (host first, as everywhere for them).
+          (phase === "result" && role === "spectator")
+            ? { you: ctx.you, them: ctx.them }
+            : undefined
+        }
       />
 
       {/* Spectator routing: any client whose role resolved to 'spectator'
@@ -428,7 +538,7 @@ export function WordpinchUI({
           // it fades in cleanly on submit and fades out into the
           // result phase once the round resolves.
           <PhaseShell key={`settling-${round}`}>
-            <SettlingPhase />
+            <SettlingPhase word={settlingWord} />
           </PhaseShell>
         ) : phase === "landing" ? (
           <PhaseShell key="landing">

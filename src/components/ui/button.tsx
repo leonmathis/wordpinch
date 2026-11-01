@@ -18,6 +18,13 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        // Pastel Pop. Disabled pills swap to a muted fill instead of fading
+        // out, so their label keeps ≥4.5:1 contrast.
+        pill: "rounded-full bg-primary font-bold text-primary-foreground hover:bg-primary/85 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100",
+        "pill-soft":
+          "rounded-full bg-card font-bold text-card-foreground hover:bg-card/80 aria-expanded:bg-primary aria-expanded:text-primary-foreground disabled:text-muted-foreground disabled:opacity-100",
+        circle:
+          "rounded-full bg-card text-card-foreground hover:bg-card/80 aria-expanded:bg-primary aria-expanded:text-primary-foreground",
       },
       size: {
         default:
@@ -31,6 +38,9 @@ const buttonVariants = cva(
         "icon-sm":
           "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
         "icon-lg": "size-9",
+        "pill-lg": "h-14 gap-2 px-6 text-[17px] [&_svg:not([class*='size-'])]:size-[18px]",
+        "pill-md": "h-11 gap-1.5 px-4 text-[15px]",
+        circle: "size-11 [&_svg:not([class*='size-'])]:size-5",
       },
     },
     defaultVariants: {

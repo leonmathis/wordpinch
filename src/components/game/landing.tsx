@@ -2,11 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useClientId, useIsMounted, useStoredString } from "@/lib/hooks";
+import { TriangleAlert } from "lucide-react";
+import { useIsMounted, useStoredString } from "@/lib/hooks";
+import { ensureIdentity } from "@/lib/identity";
+import { FEATURES } from "@/lib/features";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { ModeGrid, type Mode } from "./kit/mode-grid";
+import { StatusPill } from "./kit/status-pill";
 
 const CODE_REGEX = /^[A-HJ-NP-Z2-9]{4}$/;
 // Hoisted to avoid re-creating per keystroke.
@@ -24,11 +28,10 @@ function formatRetryAfter(seconds: number | null): string {
 
 export function Landing() {
   const router = useRouter();
-  const clientId = useClientId();
   const isMounted = useIsMounted();
-  // Name is sourced directly from localStorage via useStoredString — no local
-  // copy, no sync effect, so cross-tab edits show up immediately.
-  const [name, setName] = useStoredString("name");
+  // The name is asked for in the lobby now; a name stored from an earlier
+  // visit still goes along when creating a room.
+  const [name] = useStoredString("name");
   const [code, setCode] = React.useState("");
   const [creating, setCreating] = React.useState(false);
   // Two independent error slots. A single shared one meant a failed
@@ -46,29 +49,31 @@ export function Landing() {
   // warning. (base-ui's <Button> seems to render disabled={true} differently
   // SSR vs client, which we'd otherwise trip over.)
   const joinDisabled = isMounted && code.length !== 4;
-  const createDisabled = isMounted && (!clientId || creating);
+  const createDisabled = isMounted && creating;
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = code.trim().toUpperCase();
     if (!CODE_REGEX.test(trimmed)) {
-      setJoinError("Room codes are 4 characters — letters and digits only.");
+      setJoinError("Room codes are 4 characters, letters and digits only.");
       return;
     }
     router.push(`/r/${trimmed}`);
   };
 
   const handleCreate = async () => {
-    if (!clientId || creating) return;
+    if (creating) return;
     setCreating(true);
     setCreateError(null);
     const trimmedName = name.trim().slice(0, 32);
     try {
+      // The first room is where a visitor gets their anonymous account.
+      const hostId = await ensureIdentity();
       const res = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          hostId: clientId,
+          hostId: hostId || undefined,
           hostName: trimmedName || undefined,
         }),
       });
@@ -77,9 +82,9 @@ export function Landing() {
         if (res.status === 429) {
           const retry = Number.parseInt(res.headers.get("Retry-After") ?? "", 10);
           setCreateError(
-            `Too many rooms created from this network. Try again ${formatRetryAfter(
+            `Too many rooms from this network. Try again ${formatRetryAfter(
               Number.isFinite(retry) ? retry : null
-            )} — or join a friend's room with their code.`
+            )}, or join a friend's room with their code.`
           );
         } else {
           setCreateError(
@@ -94,71 +99,103 @@ export function Landing() {
       router.push(`/r/${data.code}`);
     } catch (err) {
       console.error("[Landing] create error", err);
-      setCreateError("Network error — check your connection and try again.");
+      setCreateError("Network error. Check your connection and try again.");
       setCreating(false);
     }
   };
 
+  const modes: Mode[] = [
+    {
+      id: "friend",
+      kind: "square",
+      fill: "var(--shape-yellow)",
+      title: creating ? "Creating\nroom…" : "Play a\nfriend",
+      sub: creating ? "one sec" : "new room",
+      onSelect: createDisabled ? undefined : handleCreate,
+      busy: creating,
+    },
+    ...(FEATURES.dailyPinch
+      ? [
+          {
+            id: "daily",
+            kind: "star" as const,
+            fill: "var(--shape-pink)",
+            title: "Daily\npinch",
+            // The artboard showed today's letters here; they stay hidden
+            // until the player starts (the clock starts with them).
+            sub: "one try a day",
+            onSelect: () => router.push("/daily"),
+          },
+        ]
+      : []),
+    ...(FEATURES.quickMatch
+      ? [
+          {
+            id: "quick",
+            kind: "circle" as const,
+            fill: "var(--shape-blue)",
+            title: "Quick\nmatch",
+            sub: "find a rival",
+            onSelect: () => router.push("/quick"),
+          },
+        ]
+      : []),
+    ...(FEATURES.passThePhone
+      ? [
+          {
+            id: "pass",
+            kind: "flower" as const,
+            fill: "var(--shape-sage)",
+            title: "Pass the\nphone",
+            sub: "one device",
+            onSelect: () => router.push("/pass"),
+          },
+        ]
+      : []),
+  ];
+
+  const joinMessage = joinError ?? codeNotice ?? "4 characters · no I, O, 0 or 1";
+
   return (
-    <>
-      <div className="wp-body">
-        <div className="wp-frame scene">
-          <p
-            className="text-foreground text-center mx-auto"
-            style={{ fontSize: 15, lineHeight: 1.7, maxWidth: "50ch", marginBottom: 28 }}
-          >
-            A two-player word game. You pick a letter, your opponent picks a letter,
-            and you both race to type a word that starts and ends with them.
-          </p>
+    <div className="wp-body">
+      <div className="wp-frame lg:max-w-[1040px]">
+        <div className="grid grid-cols-1 items-center gap-7 lg:grid-cols-2 lg:gap-x-14 lg:[grid-template-areas:'head_modes''join_modes']">
+          <h1 className="m-0 text-[42px] leading-[0.98] font-extrabold tracking-[-0.03em] md:text-[56px] lg:text-[64px] lg:[grid-area:head]">
+            Two letters,
+            <br />
+            <span className="font-hand text-[46px] font-normal tracking-normal md:text-[60px] lg:text-[70px]">
+              one scribbled word,
+            </span>
+            {/* Phones wrap after "scribbled", so "word, go!" share a line. */}
+            <br className="hidden lg:block" /> go!
+          </h1>
 
-          <div className="mx-auto w-full" style={{ maxWidth: 360 }}>
-            <Label htmlFor="name" className="t-label-up block mb-2">
-              Your name
-            </Label>
-            <Input
-              id="name"
-              className="h-[38px] rounded-[var(--radius)] text-[14px] mb-4"
-              placeholder="you"
-              value={name}
-              maxLength={32}
-              onChange={(e) => setName(e.target.value.slice(0, 32))}
-            />
-
-            {/* Primary path for a first-time visitor: they have no code to
-             *  type, so "Create new room" carries the filled button and the
-             *  join form sits below it as the secondary route. */}
-            <Button
-              type="button"
-              onClick={handleCreate}
-              disabled={createDisabled}
-              className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium"
-            >
-              {creating ? "Creating…" : "Create new room"}
-            </Button>
-            {createError ? (
-              <div
-                role="alert"
-                className="t-label text-center mt-2"
-                style={{ color: "var(--destructive)" }}
-              >
-                {createError}
-              </div>
-            ) : null}
-
-            <div className="flex items-center gap-3" style={{ marginTop: 24, marginBottom: 20 }}>
-              <Separator className="flex-1" />
-              <span className="t-label">or</span>
-              <Separator className="flex-1" />
+          <div className="flex flex-col gap-3 lg:[grid-area:modes]">
+            <div className="lg:hidden">
+              <ModeGrid modes={modes} size={160} busy={creating} data-landing="modes" />
             </div>
+            <div className="hidden lg:block">
+              <ModeGrid modes={modes} size={200} busy={creating} data-landing="modes" />
+            </div>
+            {createError ? (
+              <StatusPill tone="attention" role="alert" icon={<TriangleAlert />}>
+                {createError}
+              </StatusPill>
+            ) : null}
+          </div>
 
-            <form onSubmit={handleJoin}>
-              <Label htmlFor="room" className="t-label-up block mb-2">
-                Join with a room code
-              </Label>
+          <form onSubmit={handleJoin} className="flex w-full max-w-[480px] flex-col gap-2 lg:self-start lg:[grid-area:join]">
+            <Label htmlFor="room" className="text-sm font-bold">
+              Got a code from a friend?
+            </Label>
+            <div className="flex gap-2">
               <Input
                 id="room"
-                className="font-mono h-[38px] rounded-[var(--radius)] text-[14px] uppercase"
-                placeholder="K7QM"
+                variant="pill"
+                className="flex-1 text-xl tracking-[6px] uppercase placeholder:tracking-[6px]"
+                placeholder="CODE"
+                autoComplete="off"
+                autoCapitalize="characters"
                 value={code}
                 maxLength={4}
                 onChange={(e) => {
@@ -172,49 +209,29 @@ export function Landing() {
                   // keystroke that most needs the explanation still on
                   // screen.
                   if (AMBIGUOUS_CHAR_REGEX.test(raw)) {
-                    setCodeNotice(
-                      "Room codes never use I, O, 0 or 1 — check the code again."
-                    );
+                    setCodeNotice("Room codes never use I, O, 0 or 1. Check the code again.");
                   } else if (cleaned.length === 0) {
                     setCodeNotice(null);
                   }
                   if (joinError) setJoinError(null);
                 }}
-                aria-describedby={
-                  joinError ? "room-error" : codeNotice ? "room-notice" : "room-hint"
-                }
+                aria-describedby="room-message"
                 aria-invalid={joinError ? true : undefined}
               />
-              <div id="room-hint" className="t-label mt-2">
-                4 characters · no I, O, 0 or 1
-              </div>
-              {codeNotice ? (
-                <div id="room-notice" role="status" className="t-label mt-1">
-                  {codeNotice}
-                </div>
-              ) : null}
-              <Button
-                type="submit"
-                variant="outline"
-                className="w-full h-[38px] rounded-[var(--radius)] text-[14px] font-medium mt-3"
-                disabled={joinDisabled}
-              >
+              <Button type="submit" variant="pill" size="pill-md" className="h-13 px-6" disabled={joinDisabled}>
                 Join
               </Button>
-              {joinError ? (
-                <div
-                  id="room-error"
-                  role="alert"
-                  className="t-label text-center mt-2"
-                  style={{ color: "var(--destructive)" }}
-                >
-                  {joinError}
-                </div>
-              ) : null}
-            </form>
-          </div>
+            </div>
+            <div
+              id="room-message"
+              role={joinError ? "alert" : codeNotice ? "status" : undefined}
+              className={`px-5 text-sm font-bold ${joinError ? "text-attention" : codeNotice ? "text-foreground" : "text-muted-foreground"}`}
+            >
+              {joinMessage}
+            </div>
+          </form>
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -7,9 +7,18 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-urbanist);
+  --font-heading: var(--font-urbanist);
+  --font-hand: var(--font-gochi-hand);
+  --color-row: var(--row);
+  --color-shape-blue: var(--shape-blue);
+  --color-shape-pink: var(--shape-pink);
+  --color-shape-yellow: var(--shape-yellow);
+  --color-shape-sage: var(--shape-sage);
+  --color-shape-magenta: var(--shape-magenta);
+  --color-anchor-first: var(--anchor-first);
+  --color-anchor-last: var(--anchor-last);
+  --color-attention: var(--attention);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,26 +58,53 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Pastel Pop tokens (docs/redesign/02-design-progress.md §Tokens). The
+ * shadcn names are kept so existing primitives pick the palette up before
+ * each screen is migrated. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --muted-soft: oklch(0.58 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #f5f0e3;
+  --foreground: #141414;
+  --card: #ffffff;
+  --card-foreground: #141414;
+  --popover: #ffffff;
+  --popover-foreground: #141414;
+  --primary: #141414;
+  --primary-foreground: #ffffff;
+  --secondary: #ebe4d4;
+  --secondary-foreground: #141414;
+  --muted: #ebe4d4;
+  --muted-foreground: #4f4a40;
+  --muted-soft: #5e5a50;
+  --accent: #ebe4d4;
+  --accent-foreground: #141414;
+  --destructive: #b3261e;
+  --border: #e2dac7;
+  --input: #d6cdb8;
+  --ring: #141414;
+  --row: #f5f0e3;
+
+  /* Shape fills stay pastel in both themes; text on them is always ink. */
+  --shape-blue: #b8cdee;
+  --shape-pink: #f4b6d5;
+  --shape-yellow: #f5d565;
+  --shape-sage: #a9b97c;
+  --shape-magenta: #b83a7e;
+
+  /* First / last letter of a word. Light values are large-text only (≥3:1). */
+  --anchor-first: #3a62b0;
+  --anchor-last: #b83a7e;
+  /* Rejected input ring, urgent timer, inline errors in game screens. */
+  --attention: #b83a7e;
+
+  /* One background per phase; `.wp-root[data-phase]` picks it up. */
+  --phase-landing: #f5f0e3;
+  --phase-lobby: #f5d565;
+  --phase-pick: #f4b6d5;
+  --phase-reveal: #b8cdee;
+  --phase-pass: #c8d5a2;
+  --phase-race: #f5f0e3;
+  --phase-result: #dce4c3;
+  --phase-matchend: #b8cdee;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -86,25 +122,40 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --muted-soft: oklch(0.62 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #1b1915;
+  --foreground: #f5f0e3;
+  --card: #2a2621;
+  --card-foreground: #f5f0e3;
+  --popover: #2a2621;
+  --popover-foreground: #f5f0e3;
+  --primary: #f5f0e3;
+  --primary-foreground: #141414;
+  --secondary: #35302a;
+  --secondary-foreground: #f5f0e3;
+  --muted: #35302a;
+  --muted-foreground: #b8b2a6;
+  --muted-soft: #a8a296;
+  --accent: #35302a;
+  --accent-foreground: #f5f0e3;
+  --destructive: #ff8a80;
+  --border: rgb(245 240 227 / 10%);
+  --input: rgb(245 240 227 / 15%);
+  --ring: #f5f0e3;
+  --row: #35302a;
+
+  --anchor-first: #b8cdee;
+  --anchor-last: #f4b6d5;
+  --attention: #f4b6d5;
+
+  /* Dark mode keeps one warm ground; phase identity comes from the shapes. */
+  --phase-landing: #1b1915;
+  --phase-lobby: #1b1915;
+  --phase-pick: #1b1915;
+  --phase-reveal: #1b1915;
+  --phase-pass: #1b1915;
+  --phase-race: #1b1915;
+  --phase-result: #1b1915;
+  --phase-matchend: #1b1915;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -126,7 +177,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "ss01", "cv11";
   }
   html {
     @apply font-sans;
@@ -134,10 +184,6 @@
 }
 
 /* ── Keyframes ──────────────────────────────────────────────────────── */
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-6px); }
@@ -145,18 +191,9 @@
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
 }
-@keyframes pulse-soft {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 1; }
-}
 @keyframes typing-dot {
   0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
   40%           { opacity: 1; transform: translateY(-1px); }
-}
-@keyframes float-up {
-  0%   { opacity: 0; transform: translateY(8px); }
-  20%  { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-22px); }
 }
 @keyframes count-pop {
   0%   { opacity: 0; transform: scale(1.3); }
@@ -169,10 +206,18 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes advance-fill { from { width: 0%; } to { width: 100%; } }
-@keyframes letter-pop {
-  0%   { transform: scale(0.55); opacity: 0; }
-  60%  { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+@keyframes quick-orbit { to { transform: rotate(360deg); } }
+/* F3 reaction bubble: pops in, holds, fades. Ends invisible (fill both). */
+@keyframes fx-bubble {
+  0%   { opacity: 0; transform: translateY(6px) rotate(-3deg) scale(0.9); }
+  8%   { opacity: 1; transform: translateY(0) rotate(-3deg) scale(1); }
+  82%  { opacity: 1; transform: translateY(0) rotate(-3deg) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) rotate(-3deg) scale(1); visibility: hidden; }
+}
+@keyframes fx-bubble-fade {
+  0%   { opacity: 0; }
+  8%, 82% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
 }
 @keyframes timer-urgency-pulse {
   0%, 100% { transform: scale(1); }
@@ -180,65 +225,73 @@
 }
 
 @layer utilities {
-  /* Scene + entrance animations.
-   * The phase-level fade/slide is owned by framer-motion via
-   * `<PhaseShell>` (src/components/game/phase-shell.tsx) so we no longer
-   * apply a CSS animation here — only the inner-stack spacing. */
-  .scene > * + * { margin-top: 22px; }
 
   .shake { animation: shake 200ms ease-in-out; }
-  .flash-destructive { color: var(--destructive) !important; border-color: var(--destructive) !important; }
-  .pulse-soft { animation: pulse-soft 1.5s ease-in-out infinite; }
-  .float-up { animation: float-up 1500ms ease-out both; }
   .count-pop { animation: count-pop 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .slide-up-in { animation: slide-up-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
-  .letter-pop { animation: letter-pop 320ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: center bottom; }
+  .quick-orbit { animation: quick-orbit 9s linear infinite; }
+  .fx-bubble { transform: rotate(-3deg); animation: fx-bubble 2800ms ease-out both; }
+  /* Dev previews keep the bubble up so it can be measured. */
+  .fx-bubble[data-hold] { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .shake,
-  .float-up,
   .count-pop,
   .slide-up-in,
-  .letter-pop,
-  .pulse-soft {
+  .typing-dots i {
     animation: none;
   }
+  .quick-orbit { animation: none; }
+  /* Still disappears, without moving. */
+  .fx-bubble { animation-name: fx-bubble-fade; }
+  .fx-bubble[data-hold] { animation: none; }
+  /* Still reads as "…" without the loop. */
+  .typing-dots i:nth-child(2) { opacity: 0.6; }
+  .typing-dots i:nth-child(3) { opacity: 0.3; }
 }
 
 @layer components {
-  /* ── Typography helpers ───────────────────────────────────────────── */
-  .t-label    { @apply font-mono text-[13px] text-muted-foreground tracking-[0.01em]; }
-  .t-label-up { @apply font-mono text-[11px] text-muted-foreground tracking-[0.08em] uppercase; }
 
   /* ── Game UI shell ────────────────────────────────────────────────── */
   .wp-root {
-    @apply relative w-full flex-1 flex flex-col bg-background text-foreground;
+    @apply relative w-full flex-1 flex flex-col text-foreground;
     min-height: 100%;
+    background-color: var(--wp-phase-bg, var(--background));
+    transition: background-color 260ms ease;
+  }
+  .wp-root[data-phase="landing"] { --wp-phase-bg: var(--phase-landing); }
+  .wp-root[data-phase="lobby"] { --wp-phase-bg: var(--phase-lobby); }
+  .wp-root[data-phase="pick"] { --wp-phase-bg: var(--phase-pick); }
+  .wp-root[data-phase="reveal"] { --wp-phase-bg: var(--phase-reveal); }
+  .wp-root[data-phase="race"] { --wp-phase-bg: var(--phase-race); }
+  .wp-root[data-phase="result"] { --wp-phase-bg: var(--phase-result); }
+  .wp-root[data-phase="matchend"] { --wp-phase-bg: var(--phase-matchend); }
+  /* F6: the daily pinch shares the pick screen's pink. */
+  .wp-root[data-phase="daily"] { --wp-phase-bg: var(--phase-pick); }
+  /* F8: pass the phone, light sage (#C8D5A2 in the artboard). */
+  .wp-root[data-phase="pass"] { --wp-phase-bg: var(--phase-pass); }
+  /* F7: quick match waits on the reveal's blue. */
+  .wp-root[data-phase="quick"] { --wp-phase-bg: var(--phase-reveal); --quick-ring: #3e4a5e; }
+  .dark .wp-root[data-phase="quick"] { --quick-ring: #4a443c; }
+  @media (prefers-reduced-motion: reduce) {
+    .wp-root { transition: none; }
   }
 
-  .wp-progress {
-    @apply absolute top-0 left-0 z-[5];
-    height: 2px;
-    background: color-mix(in oklch, var(--foreground) 70%, transparent);
-    transition: width 600ms cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
+  /* Opaque in the phase colour: `.wp-body` scrolls underneath, and a
+   * transparent bar let tall screens (the phone lobby) run their text
+   * through the wordmark and the gear. 64px tall = `.wp-body`'s top padding. */
   .wp-chrome {
     @apply absolute top-0 left-0 right-0 z-[4] flex items-start justify-between;
-    padding: 14px 20px 10px;
+    padding: 14px 20px 6px;
     pointer-events: none;
+    background-color: var(--wp-phase-bg, var(--background));
+    transition: background-color 260ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wp-chrome { transition: none; }
   }
   .wp-chrome > * { pointer-events: auto; }
-  .wp-brand { @apply text-[15px] font-medium; letter-spacing: -0.01em; }
-  .wp-chrome-right { @apply flex flex-col items-end gap-2; }
-  .wp-counter {
-    @apply font-mono text-[13px] text-muted-foreground tabular-nums;
-  }
-  /* gap-2 (8px), not gap-0.5: the icon buttons carry a 4px-per-side
-   * invisible hit area, and at 2px spacing those overlapped so the
-   * left-hand icon became hard to hit on touch. */
-  .wp-icons { @apply flex gap-2; }
 
   /* Flow container for the reconnect / role-error banners. The top padding
    * clears the absolutely-positioned chrome; because this sits above
@@ -246,10 +299,8 @@
    * being covered. */
   .wp-banners {
     @apply relative z-[4] flex flex-col items-center gap-2 shrink-0;
-    padding: 56px 16px 0;
-  }
-  @media (min-width: 640px) {
-    .wp-banners { padding-top: 48px; }
+    /* Top bar: 14px padding + 44px gear = 58px; 8px gap below it. */
+    padding: 66px 16px 0;
   }
 
   .wp-body {
@@ -281,11 +332,24 @@
     margin-block: auto;
   }
 
-  /* ── Atoms ────────────────────────────────────────────────────────── */
-  .wp-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--foreground);
-    display: inline-block;
+  /* F4 no-repeat: a letter picked earlier this match. Magenta hatch on
+   * white (pink on the dark surface), as in the pick artboard. */
+  .pick-used {
+    background-color: #ffffff;
+    background-image: repeating-linear-gradient(45deg, #b83a7e 0 2px, #ffffff 2px 6px);
+  }
+  .dark .pick-used {
+    background-color: var(--card);
+    background-image: repeating-linear-gradient(45deg, #f4b6d5 0 2px, var(--card) 2px 6px);
+  }
+  .pick-used-letter {
+    @apply flex size-[1.6em] items-center justify-center rounded-full;
+    background-color: #ffffff;
+    color: #141414;
+  }
+  .dark .pick-used-letter {
+    background-color: var(--card);
+    color: var(--muted-foreground);
   }
 
   .typing-dots { @apply inline-flex items-center gap-[3px]; }
@@ -309,142 +373,13 @@
     .timer-pulse { animation: none; }
   }
 
-  .link-underline {
-    @apply text-foreground underline;
-    text-underline-offset: 3px;
-  }
-  .link-underline:hover { text-decoration-thickness: 2px; }
-
-  /* ── Phase: Lobby ─────────────────────────────────────────────────── */
-  .room-code {
-    @apply font-mono font-medium block text-left;
-    font-size: 48px;
-    letter-spacing: 0.05em;
-    line-height: 1;
-  }
-  @media (max-width: 500px) { .room-code { font-size: 36px; } }
-
-  .players-row,
-  .settings-row {
-    @apply flex items-center justify-between;
-    min-height: 48px;
-    padding: 0 12px;
-  }
-
-  /* ── Phase: Pick ──────────────────────────────────────────────────── */
-  .pick-input {
-    @apply font-mono font-medium text-center w-[110px] bg-transparent outline-none uppercase;
-    font-size: 72px;
-    border: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 0 0 12px;
-    color: var(--foreground);
-    caret-color: var(--foreground);
-    letter-spacing: 0;
-    text-transform: uppercase;
-  }
-  .pick-input:focus { border-bottom-color: var(--foreground); }
-  @media (max-width: 500px) { .pick-input { font-size: 56px; width: 84px; } }
-
-  /* ── Phase: Reveal ────────────────────────────────────────────────── */
-  .countdown {
-    @apply font-mono font-medium tabular-nums;
-    font-size: 96px;
-    line-height: 1;
-    color: var(--foreground);
-  }
-  @media (max-width: 500px) { .countdown { font-size: 72px; } }
-
-  .letters-template {
-    @apply font-mono font-medium;
-    font-size: 72px;
-    letter-spacing: 0.08em;
-    line-height: 1;
-  }
-  .letters-template .gap { color: var(--muted-soft); }
-  @media (max-width: 500px) { .letters-template { font-size: 52px; } }
-
-  .letters-pinned {
-    @apply font-mono font-medium whitespace-nowrap;
-    font-size: 48px;
-    letter-spacing: 0.06em;
-    line-height: 1;
-    flex-shrink: 0;
-  }
-  .letters-pinned .gap { color: var(--muted-soft); }
-  @media (max-width: 500px) {
-    .letters-pinned { font-size: 28px; letter-spacing: 0.04em; }
-  }
-
-  /* ── Phase: Race ──────────────────────────────────────────────────── */
-  .race-input-wrap {
-    position: relative;
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-  .race-input {
-    @apply font-mono font-medium text-center w-full uppercase bg-transparent outline-none;
-    font-size: 48px;
-    letter-spacing: 0.04em;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    height: 96px;
-    padding: 0 16px;
-    color: var(--foreground);
-    caret-color: var(--foreground);
-    transition: border-color 120ms;
-  }
-  .race-input::placeholder { color: var(--muted-soft); }
-  .race-input:focus {
-    border-color: color-mix(in oklch, var(--foreground) 30%, var(--border));
-  }
-  @media (max-width: 500px) {
-    .race-input { font-size: 36px; height: 80px; }
-  }
-  .race-progress {
-    @apply absolute;
-    left: 1px; right: 1px; bottom: 0;
-    height: 1px;
-    background: var(--foreground);
-    transition: width 1000ms linear;
-  }
-
-  /* ── Phase: Result ────────────────────────────────────────────────── */
-  .result-word {
-    @apply m-0;
-    font-size: 64px;
-    font-weight: 400;
-    letter-spacing: -0.02em;
-    line-height: 1;
-  }
-  .result-word .anchor { font-weight: 500; }
-  @media (max-width: 500px) { .result-word { font-size: 48px; } }
-
-  .result-ipa {
-    @apply font-mono italic;
-    font-size: 18px;
-    color: var(--muted-foreground);
-  }
-
-  .def-block + .def-block { margin-top: 14px; }
-  .def-block .def-label {
-    @apply font-mono text-[13px] text-muted-foreground;
-    margin-bottom: 4px;
-  }
-  .def-block .def { font-size: 15px; line-height: 1.55; }
-  .def-block .ex {
-    @apply italic text-muted-foreground;
-    font-size: 14px; line-height: 1.55;
-    margin-top: 4px;
-  }
-
   .advance-bar {
-    @apply relative w-full;
-    height: 1px;
-    background: var(--border);
+    @apply relative w-full overflow-hidden rounded-full;
+    height: 6px;
+    background: color-mix(in oklch, var(--foreground) 15%, transparent);
   }
   .advance-bar > i {
-    @apply absolute top-0 left-0 h-full;
+    @apply absolute top-0 left-0 h-full rounded-full;
     background: var(--foreground);
     /* Duration comes from the phase that owns the timer (ResultPhase sets
      * --advance-duration), so the bar can't finish late or early. */
@@ -454,55 +389,7 @@
    * the frame) — the bar freezes with the countdown it represents. */
   .advance-bar[data-held="true"] > i { animation-play-state: paused; }
 
-  .score-delta {
-    @apply font-mono inline-block;
-    font-size: 13px;
-    color: var(--foreground);
-  }
-
-  /* ── Phase: Match end ─────────────────────────────────────────────── */
-  .scoreboard-row {
-    @apply flex items-center justify-between relative;
-    min-height: 48px;
-    padding: 0 12px;
-  }
-  .scoreboard-row[data-winner="true"]::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 25%; bottom: 25%;
-    width: 2px;
-    background: var(--foreground);
-  }
-
-  /* Used-words list follows the same conventions as the lobby's
-   * .players-row / .settings-row: each row is a 48px-min-height flex with
-   * 12px horizontal padding and justify-between, separators in the
-   * surrounding container span full width. The row's left section groups
-   * round + word + ipa; the right section carries "won by X". */
-  .used-row {
-    @apply flex items-center justify-between font-mono;
-    min-height: 48px;
-    padding: 0 12px;
-    font-size: 13px;
-    gap: 12px;
-  }
-  .used-row .word { color: var(--foreground); }
-  .used-row .meta,
-  .used-row .ipa,
-  .used-row .by {
-    color: var(--muted-foreground);
-  }
-
   /* ── Overlays ─────────────────────────────────────────────────────── */
-  /* .spec-banner, .reconnect-banner: replaced by shadcn `Alert` (see
-   *  reconnect-banner.tsx and spectator-phase.tsx#Banner). Toast feedback
-   *  now goes through sonner; the old .toast / @keyframes toast-pop are
-   *  removed. */
-
-  .url-row {
-    @apply flex items-stretch overflow-hidden border border-border;
-    border-radius: var(--radius);
-  }
 
   .qr {
     @apply mx-auto grid;

@@ -1,17 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Gochi_Hand, Urbanist } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const urbanist = Urbanist({
+  variable: "--font-urbanist",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Handwritten accent face: headline second lines and the game letters
+// inside shapes. Not a variable font, so next/font needs the weight.
+const gochiHand = Gochi_Hand({
+  variable: "--font-gochi-hand",
+  weight: "400",
   subsets: ["latin"],
 });
 
@@ -27,8 +30,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f0e3" },
+    { media: "(prefers-color-scheme: dark)", color: "#1b1915" },
   ],
 };
 
@@ -40,7 +43,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${urbanist.variable} ${gochiHand.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       {/* `h-full overflow-hidden` (instead of `min-h-full`) is what
@@ -61,7 +64,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          <Toaster position="bottom-center" richColors closeButton />
+          <Toaster position="bottom-center" closeButton />
         </ThemeProvider>
         <Analytics />
       </body>

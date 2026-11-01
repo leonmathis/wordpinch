@@ -135,34 +135,3 @@ export function useSustained(active: boolean, delayMs: number): boolean {
 
   return sustained;
 }
-
-// ── useClientId ────────────────────────────────────────────────────────
-const CLIENT_ID_KEY = STORAGE_PREFIX + "client-id";
-const clientIdNoopSubscribe = () => () => {};
-
-function getOrCreateClientId(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    let id = window.localStorage.getItem(CLIENT_ID_KEY);
-    if (!id) {
-      id = crypto.randomUUID();
-      window.localStorage.setItem(CLIENT_ID_KEY, id);
-    }
-    return id;
-  } catch {
-    return "";
-  }
-}
-
-/**
- * Returns the stable per-browser client UUID, generating one on first call.
- * Persisted in localStorage under `wordpinch:v1:client-id`.
- * Returns "" during SSR.
- */
-export function useClientId(): string {
-  return React.useSyncExternalStore(
-    clientIdNoopSubscribe,
-    getOrCreateClientId,
-    () => ""
-  );
-}

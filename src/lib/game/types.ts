@@ -1,5 +1,7 @@
 import type { RoomActions } from "./actions";
 import type { PersistedGameState } from "./state";
+import type { Incoming } from "../room-fx";
+import type { ReactionId } from "./reactions";
 
 /** Display shape for a player slot in the UI. Server stores only `name`
  *  (in state.players), but the UI thinks in name+score pairs. */
@@ -124,6 +126,14 @@ export type GameCtx = {
    * same player had left.
    */
   opponentSubmitted: boolean;
+  /**
+   * Per-seat status by role, for views that show both players at once (the
+   * spectator race): online from presence (assumed until the first sync),
+   * submitted from `pendingResult`.
+   */
+  seats: Record<"host" | "guest", { online: boolean; submitted: boolean }>;
+  /** Everyone subscribed to the room, players included; null before sync. */
+  watchers: number | null;
   used: UsedWord[];
   /**
    * How each finished round ended. Lets the match-end summary label rounds
@@ -132,6 +142,28 @@ export type GameCtx = {
    */
   roundOutcomes: NonNullable<PersistedGameState["rounds"]>;
   roomCode: string;
+  /**
+   * F2 word collection. `enabled` when this viewer can keep words: a
+   * seated player with an anonymous account (legacy clientId players and
+   * spectators have no collection). In a dev preview nothing is sent;
+   * `previewCount` stands in for the match-end banner's count.
+   */
+  collection: { enabled: boolean; preview: boolean; previewCount: number };
+  /**
+   * F3 reactions, cheers and letter counts (`lib/room-fx.ts`). Cosmetic:
+   * `incoming` is the latest reaction or cheer from someone else, `lens`
+   * the current round's letter count per seat (null until reported).
+   */
+  /** F4: letters picked earlier this match, when "No repeat letters" is on. */
+  blocked: ReadonlySet<string>;
+  /** F4 peek: whether the rule is on, and the round this player spent it in. */
+  peek: { on: boolean; spentRound: number | null };
+  fx: {
+    incoming: Incoming | null;
+    lens: Record<"host" | "guest", number | null>;
+    react: (id: ReactionId) => void;
+    typing: (len: number) => void;
+  };
   shareOpen: boolean;
   reconnectOpen: boolean;
   openShare: () => void;
@@ -147,7 +179,7 @@ export type GameCtx = {
    * has flipped to `result`. This avoids the "you lost" flash on the
    * loser's screen before their near-miss attempt is appended — the
    * result phase only mounts once the submitter knows their final
-   * outcome.
+   * outcome. `word` is shown on the settling screen ("You played …").
    */
-  setSubmitInFlight: (b: boolean) => void;
+  setSubmitInFlight: (b: boolean, word?: string) => void;
 };

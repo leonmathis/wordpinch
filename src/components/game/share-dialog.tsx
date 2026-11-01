@@ -95,33 +95,40 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-background border border-border ring-0 sm:max-w-[360px] p-6">
-        <DialogTitle className="text-[15px] font-medium">Share room</DialogTitle>
-        <DialogDescription className="t-label mt-1">{roomCode}</DialogDescription>
+      <DialogContent variant="sheet">
+        <div className="pr-14">
+          <DialogTitle className="text-[28px] leading-none font-extrabold">Invite a friend</DialogTitle>
+          <DialogDescription className="mt-1 font-hand text-[26px] leading-tight text-foreground">
+            they join with {roomCode}
+          </DialogDescription>
+        </div>
 
-        <div className="url-row mt-4">
+        <div className="flex gap-2">
           <Input
             ref={urlInputRef}
+            variant="pill"
             readOnly
             value={fullUrl}
+            aria-label="Room link"
             onFocus={(e) => e.currentTarget.select()}
-            className="font-mono text-[13px] h-9 rounded-none border-0 bg-transparent px-3 focus-visible:ring-0 focus-visible:border-transparent flex-1 min-w-0"
+            className="flex-1 bg-row text-base"
           />
           <Button
-            variant="ghost"
+            variant="circle"
+            size="circle"
             onClick={copy}
             aria-label={copied ? "Copied" : "Copy link"}
-            className="rounded-none border-l border-border h-9 w-10 px-0 grid place-items-center"
+            className={`size-13 ${copied ? "bg-shape-sage text-[#141414] hover:bg-shape-sage" : "bg-row"}`}
           >
-            <span className="relative inline-flex h-4 w-4 items-center justify-center">
+            <span className="relative inline-flex size-5 items-center justify-center">
               <Copy
-                className={`absolute h-4 w-4 transition-all duration-200 ease-out motion-reduce:transition-none ${
+                className={`absolute size-5 transition-all duration-200 ease-out motion-reduce:transition-none ${
                   copied ? "scale-75 opacity-0" : "scale-100 opacity-100"
                 }`}
                 aria-hidden
               />
               <Check
-                className={`absolute h-4 w-4 transition-all duration-200 ease-out motion-reduce:transition-none ${
+                className={`absolute size-5 transition-all duration-200 ease-out motion-reduce:transition-none ${
                   copied ? "scale-100 opacity-100" : "scale-75 opacity-0"
                 }`}
                 aria-hidden
@@ -131,18 +138,19 @@ export function ShareDialog({ open, onOpenChange, roomCode }: Props) {
         </div>
 
         {canShare ? (
-          <Button
-            onClick={share}
-            className="w-full h-9 rounded-[var(--radius)] text-[13px] font-medium mt-3"
-          >
+          <Button variant="pill" size="pill-lg" onClick={share} className="w-full">
             Share via…
           </Button>
         ) : null}
 
-        <QR value={fullUrl} />
-
-        <div className="t-label text-center mt-2.5">
-          Scan to join — or share the link
+        <div className="flex items-center gap-4 rounded-[26px] bg-shape-yellow p-3.5 text-[#141414]">
+          <div className="shrink-0 overflow-hidden rounded-2xl bg-white p-1.5">
+            <QR value={fullUrl} size={112} className="mt-0" />
+          </div>
+          <div>
+            <div className="text-lg font-extrabold">Scan to join</div>
+            <div className="font-hand text-[22px] leading-tight">or just shout the code across the room</div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

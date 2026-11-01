@@ -10,15 +10,15 @@ A real-time 2-player word game. Pick a letter, race to type a word that starts/e
 
 ## Current state
 
-Static design implementation — phase 2 of 10. All 8 game phases are built as React components backed by mock data. No realtime, no Supabase, no word validation yet.
+The Pastel Pop redesign (R1–R10) and its new features (F1–F8) are built: anonymous accounts, word collection, reactions, no-repeat and peek, share images, daily pinch, quick match and pass the phone, over Supabase (Postgres, Realtime broadcast + presence) with server-authoritative rooms. Open items for the hosted project are listed in `docs/redesign/03-code-mapping.md` §8.
 
 ## Stack
 
 - Next.js 16.2 (Turbopack, App Router), React 19.2
-- Tailwind CSS 4 + shadcn (base-nova preset, neutral palette)
-- shadcn primitives from `@base-ui/react`: Button, Input, Switch, Dialog, ToggleGroup, Label, Separator
+- Tailwind CSS 4 + shadcn (base-nova preset), restyled to the Pastel Pop redesign (`docs/redesign/`)
+- shadcn primitives from `@base-ui/react`: Button (`pill`, `pill-soft`, `circle`), Input (`pill`), Switch, Dialog (`sheet`), ToggleGroup (`segment`), Popover, Label
 - `next-themes` for system-aware dark mode
-- Geist Sans + Geist Mono via `next/font/google`
+- Urbanist (UI) + Gochi Hand (handwritten lines and game letters) via `next/font/google`
 - `lucide-react` icons
 
 ## File map
@@ -26,24 +26,46 @@ Static design implementation — phase 2 of 10. All 8 game phases are built as R
 ```
 src/
 ├─ app/
-│  ├─ layout.tsx              Geist fonts, ThemeProvider, metadata
+│  ├─ layout.tsx              Urbanist + Gochi Hand, ThemeProvider, metadata
+│  ├─ not-found.tsx           Pastel Pop 404 (shared with r/[code]/not-found.tsx)
+│  ├─ dev/kit/                dev-only kit showcase (404 in production)
 │  ├─ page.tsx                renders Landing via WordpinchUI
-│  ├─ globals.css             tokens, animations, component classes
+│  ├─ api/identity/adopt/     moves a pre-F1 clientId's seats onto the account
+│  ├─ api/collection/         the caller's word collection (RLS, own rows)
+│  ├─ collection/page.tsx     "Your words" page (F2)
+│  ├─ daily/page.tsx          daily pinch (F6); api/daily/{,start,submit,card}
+│  ├─ quick/page.tsx          quick match (F7); api/quick (GET/POST/DELETE)
+│  ├─ pass/page.tsx           pass the phone (F8), local; api/words/pair
+│  ├─ r/[code]/opengraph-image.tsx  link preview: result or invite card (F5)
+│  ├─ r/[code]/card/route.tsx       the same card 1080×1350 (?download=1 saves)
+│  ├─ globals.css             tokens, phase backgrounds, animations, shell classes
 │  └─ r/[code]/page.tsx       Promise.all on params/searchParams → WordpinchUI
 ├─ components/
 │  ├─ theme-provider.tsx      thin wrapper around next-themes
 │  ├─ ui/                     shadcn primitives
 │  └─ game/                   phase components
 │     ├─ wordpinch-ui.tsx     phase switcher; ShareDialog is next/dynamic
-│     ├─ top-chrome.tsx       progress bar, brand, theme/mute/share buttons
-│     ├─ score-hud.tsx        score row + expandable used-words list
-│     ├─ letters-display.tsx  the `T _ _ _ H` display, shared
-│     └─ (8 phase files + share-dialog, qr, reconnect-banner)
+│     ├─ top-chrome.tsx       round label + pills (inline score), settings gear
+│     ├─ settings-menu.tsx    room/share, sound, theme, how to play, leave
+│     ├─ kit/                 Shape, ShapeGlyph (+ measured glyph offsets),
+│     │                       LetterSlots, AnchoredWord, StatusPill, ModeGrid
+│     └─ (8 phase files + share-dialog, qr, banners, words-played, rounds-table)
 └─ lib/
    ├─ utils.ts                cn() — clsx + tailwind-merge
    ├─ hooks.ts                useStoredBool (useSyncExternalStore)
+   ├─ features.ts             flags for daily / quick match / pass the phone
+   ├─ identity.ts             anonymous sign-in, useIdentity / ensureIdentity / useHasAccount
+   ├─ collection.ts           server: collect_word, won words on resolve, reads
+   ├─ room-fx.ts              reactions / cheers / letter count on the fx: topic
+   ├─ game/rules.ts           F4 blockedLetters (no-repeat) shared by server and UI
+   ├─ og/                     F5 share card (next/og): match-card, daily-card, fonts, render
+   ├─ daily.ts                F6 puzzle per UTC day, one try, server clock, board, streak
+   ├─ quick.ts                F7 queue, pairing (quick_match_pair), fixed rules
+   ├─ game/word-input.ts      locked-first-letter input (race, daily)
+   ├─ supabase/identity.ts    server: resolveCallerId (session first, clientId fallback)
    └─ game/
-      ├─ mock.ts              deepFrozen MOCK
+      ├─ preview.ts           dev preview state (see Routes)
+      ├─ awards.ts            match-end fastest / longest
       └─ types.ts             GameCtx, GamePhase
 ```
 
@@ -53,19 +75,29 @@ src/
 - `/r/[code]` → renders `WordpinchUI` with the room code uppercased
 - `/r/[code]?phase=lobby|pick|reveal|race|result|matchend|spectator` → that phase (defaults to `lobby`)
 - `?reconnect=1` overlays the reconnect banner
-
-A dev-only phase strip at the bottom of `/r/[code]` is gated by `process.env.NODE_ENV === "development"` and tree-shaken from production.
+- `/collection` → the player's word collection (F2)
+- `/daily` → the daily pinch (F6)
+- `/quick` → quick match (F7)
+- `/pass` → pass the phone (F8)
+- Dev only, with `?phase=`: `as=host|guest|spectator` seeds a room without network (`lib/game/preview.ts`); `guest=0` empties the guest seat, `stress=1` uses 32-character names and long words, `away=1` drops the opponent, `opp=submitted`, `settling=1`, `result=win|nearmiss|split|splittimeout|nobody|nobodytimeout|forfeit|replay`, `end=win|loss|tie`, `rounds=15`, `collected=3` (match-end banner count), `rx=close|gg|hurry|go-host|go-guest|ooh` (incoming reaction), `typed=4` (opponent's letter count), `norepeat=1` (G E P K used), `peek=1|used`. The code must be 4 valid characters, e.g. `/r/K7QM`.
 
 ## Conventions
 
-- **shadcn first.** Don't write plain `<button>` or `<input>` when a shadcn primitive fits. The two giant typographic inputs (`pick-input`, `race-input`) wrap shadcn `Input` with className overrides — see `PICK_INPUT_OVERRIDES` / `RACE_INPUT_OVERRIDES` in their phase files.
+- **shadcn first.** Don't write plain `<button>` or `<input>` when a shadcn primitive fits; use the Pastel Pop variants.
+- **Text inside shapes** keeps ≥12px from the real outline and glyphs are optically centred; both are measured in `tests/e2e` (kit, landing, race, matchend).
 - **Tailwind for one-offs**, `@layer components` in `globals.css` for repeated patterns or anything needing `::before` / nth-child / pseudo selectors.
-- **Subgrid** for cross-row column alignment (see `.used-list` + `.used-row` in `globals.css`).
 - **Phase reset** via `key={sceneKey}` remount — never `setState` in a `useEffect` body (React 19 will lint it).
 - **Persisted state** via `useStoredBool` (`useSyncExternalStore` + cross-tab `storage` events). Keys are namespaced `wordpinch:v1:…`.
 - **`prefers-reduced-motion`** is honored on all entrance/scene animations.
+- **Identity (F1).** Every player has an anonymous Supabase account (session in cookies). Room routes get the caller from `resolveCallerId`, never straight from the body; a body id is only the fallback for browsers without a session and is refused when it is an account id. Nothing signs in until a room is created or opened.
+- **Collection (F2).** Writes only on the server through `collect_word` (won words in `resolveRound`, bookmarks via `POST /api/rooms/[code]/save-word`, which reads the word from the room, never the body). Reads run with the caller's session, so RLS returns their own rows. One row per player and word; a win replaces a bookmark.
+- **Reactions (F3).** Cosmetic only, on their own topic `fx:<CODE>` (migration `20261031140000`), never on `room:` (server-only broadcasts) and never in presence (Realtime allows a client 5 presence events per 30 s). Receivers accept only ids from `lib/game/reactions.ts` and a 0–50 letter count for the current round; the letters themselves are never sent. Reaction pills `preventDefault` on mousedown so the race input keeps focus (the phone keyboard stays up).
+- **Daily pinch (F6).** One puzzle per UTC day (`daily_puzzles`, letters picked from the date among pairs with ≥12 valid words). The letters only reach a player when the server starts their clock (`POST /api/daily/start`, decision 1); the time is measured on the server from that stamp to the accepted word. Both tables are server-only.
+- **Server-owned state fields.** `matchStartedAt`, `usedLetters` and `peeks` are written only by server code; `updateRoomState` always copies them from the row over whatever the client's snapshot says, and resets them when a match leaves the lobby.
+- **Server-read constants live in plain modules.** A server component that imports a value from a `"use client"` file gets a client-reference stub, not the value (the dev preview parser silently rejected every `rx=` that way).
 - **Async params/searchParams.** In Next 16, both are Promises and must be `await Promise.all([params, searchParams])`.
 - **Ternaries, not `&&`** for conditional rendering — `&&` with a number type renders `0` as text.
+- **Space after an expression:** `{name} still waiting` loses its space when the JSX text runs on to a line break (the toolchain trims it; same line before the closing tag is fine). Use a template string (`{`${name} still waiting`}`) or `{" "}`.
 
 ## Common tasks
 
@@ -74,7 +106,7 @@ A dev-only phase strip at the bottom of `/r/[code]` is gated by `process.env.NOD
 | Add a shadcn component | `npx shadcn@latest add <name>` — drops into `src/components/ui/` |
 | Change a design token | `globals.css` `:root` / `.dark` blocks (oklch values) |
 | Add a new game phase | New component in `src/components/game/`, add to `GamePhase` in `types.ts`, add to the phase switch in `wordpinch-ui.tsx` and the validator in `r/[code]/page.tsx` |
-| Adjust mock data | `src/lib/game/mock.ts` — re-`deepFreeze`d on edit |
+| Adjust preview data | `src/lib/game/preview.ts` |
 
 ## Verify before committing
 
@@ -82,9 +114,10 @@ A dev-only phase strip at the bottom of `/r/[code]` is gated by `process.env.NOD
 npx tsc --noEmit   # typecheck
 npm run lint       # eslint
 npm run build      # production build (typechecks too)
+npm run test:e2e   # Playwright on 6 device profiles (dev server)
 ```
 
-Visual: open the dev server and click through the phase strip at the bottom of `/r/slate-9f`. CSS Grid `max-content` is per-grid-container, so any change to `.used-row` needs verification across multiple rows.
+Screenshots land in `test-results/screens/` (scrolled `.wp-body` segments as `-2`, `-3`…). The per-PR checklist is in `docs/redesign/03-code-mapping.md` §7. If a CSS change doesn't show, check the computed style: Turbopack's persistent dev cache (`.next/dev`) can keep serving an old `globals.css`, even across a restart. Stop the server, `rm -rf .next/dev`, start again. The same goes for a folder created while the server runs: edits inside it were not picked up (`src/lib/og/` in F5).
 
 ## What's coming next (phase 3+)
 

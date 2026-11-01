@@ -1,6 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase/admin";
 import { initialGameState, type PersistedGameState } from "./game/state";
+import { collectRoundWins } from "./collection";
+import { blockedLetters, withRoundLetters } from "./game/rules";
 
 // 31 unambiguous chars (excludes I, O, 0, 1). 31^4 ≈ 923K codes.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -123,50 +125,68 @@ export async function getRoomByCode(
  * On the matchend transition we always take `scores`, `usedWords` and
  * `rounds` from the current DB row, ignoring whatever the client sent —
  * the client never holds authoritative score info anyway.
+ *
+ * Returns the state as written (or null when the caller holds no seat), so
+ * the broadcast carries the server's corrections rather than the snapshot.
  */
 export async function updateRoomState(opts: {
   code: string;
   actorId: string;
   state: PersistedGameState;
-}): Promise<boolean> {
-  if (!isValidCode(opts.code)) return false;
+}): Promise<PersistedGameState | null> {
+  if (!isValidCode(opts.code)) return null;
   const admin = supabaseAdmin();
   // PostgREST `or` filter — the actor must hold one of the two player slots.
   // `actorId` is UUID-validated by the route before it reaches this point.
   const actorFilter = `host_id.eq.${opts.actorId},guest_id.eq.${opts.actorId}`;
 
-  let stateToWrite: PersistedGameState = opts.state;
-  if (opts.state.phase === "pick" || opts.state.phase === "matchend") {
-    const current = await admin
-      .from("rooms")
-      .select("state")
-      .eq("code", opts.code)
-      .or(actorFilter)
-      .maybeSingle();
-    if (current.error) throw current.error;
-    if (!current.data) return false;
-    const currentState = current.data.state as PersistedGameState;
-    if (opts.state.phase === "pick" && currentState.phase === "pick") {
-      stateToWrite = {
-        ...opts.state,
-        pick: {
-          ...opts.state.pick,
-          hostLetter: currentState.pick.hostLetter,
-          guestLetter: currentState.pick.guestLetter,
-        },
-      };
-    } else if (opts.state.phase === "matchend") {
-      stateToWrite = {
-        ...opts.state,
-        scores: currentState.scores,
-        usedWords: currentState.usedWords,
-        // `rounds` travels with `scores`: both are written by whichever
-        // action resolved the last round, so taking one from the DB and
-        // the other from the client's snapshot could show a summary that
-        // disagrees with the score line.
-        rounds: currentState.rounds,
-      };
-    }
+  const current = await admin
+    .from("rooms")
+    .select("state")
+    .eq("code", opts.code)
+    .or(actorFilter)
+    .maybeSingle();
+  if (current.error) throw current.error;
+  if (!current.data) return null;
+  const currentState = current.data.state as PersistedGameState;
+
+  // Server-owned fields always come from the row, never from the client's
+  // snapshot, which may predate them (a referee's timeout POST carrying a
+  // state from before the other player's peek wiped it). Settings change
+  // only through `updateRoomSettings`; a snapshot from before the host's
+  // last change put a one-round match back to five rounds on Vercel.
+  let stateToWrite: PersistedGameState = {
+    ...opts.state,
+    settings: currentState.settings,
+    matchStartedAt: currentState.matchStartedAt,
+    usedLetters: currentState.usedLetters,
+    peeks: currentState.peeks,
+  };
+  if (opts.state.phase === "pick" && currentState.phase === "lobby") {
+    // A match starts: the server's clock marks it, so the match-end
+    // banner can count the words collected since (F2), and the F4
+    // letters and peeks start fresh.
+    stateToWrite = { ...stateToWrite, matchStartedAt: Date.now(), usedLetters: [], peeks: {} };
+  } else if (opts.state.phase === "pick" && currentState.phase === "pick") {
+    stateToWrite = {
+      ...stateToWrite,
+      pick: {
+        ...opts.state.pick,
+        hostLetter: currentState.pick.hostLetter,
+        guestLetter: currentState.pick.guestLetter,
+      },
+    };
+  } else if (opts.state.phase === "matchend") {
+    stateToWrite = {
+      ...stateToWrite,
+      scores: currentState.scores,
+      usedWords: currentState.usedWords,
+      // `rounds` travels with `scores`: both are written by whichever
+      // action resolved the last round, so taking one from the DB and
+      // the other from the client's snapshot could show a summary that
+      // disagrees with the score line.
+      rounds: currentState.rounds,
+    };
   }
 
   const { data, error } = await admin
@@ -178,7 +198,7 @@ export async function updateRoomState(opts: {
     .maybeSingle();
 
   if (error) throw error;
-  return data !== null;
+  return data ? stateToWrite : null;
 }
 
 export type SettingsResult =
@@ -324,6 +344,7 @@ export type LockLetterResult =
         | "not_found"
         | "forbidden"
         | "wrong_phase"
+        | "letter_used"
         | "concurrent_update";
     };
 
@@ -372,6 +393,11 @@ export async function lockPlayerLetter(opts: {
       return { ok: false, reason: "wrong_phase" };
     }
 
+    // F4: a letter from an earlier round of this match is off the table.
+    if (blockedLetters(room.state).has(letter)) {
+      return { ok: false, reason: "letter_used" };
+    }
+
     const myKey: "hostLetter" | "guestLetter" =
       role === "host" ? "hostLetter" : "guestLetter";
     const otherKey: "hostLetter" | "guestLetter" =
@@ -390,7 +416,15 @@ export async function lockPlayerLetter(opts: {
     const nextState: PersistedGameState = {
       ...room.state,
       pick: nextPick,
-      ...(bothLocked ? { phase: "reveal" as const } : {}),
+      ...(bothLocked
+        ? {
+            phase: "reveal" as const,
+            usedLetters: withRoundLetters(room.state.usedLetters, room.state.round, [
+              nextPick.hostLetter!,
+              nextPick.guestLetter!,
+            ]),
+          }
+        : {}),
     };
 
     // The other player's slot must still be what we just read. If they
@@ -912,5 +946,81 @@ export async function resolveRound(opts: {
     const fresh = await getRoomByCode(opts.code);
     return fresh ? { state: fresh.state } : null;
   }
+  // F2: the awarded words go into the players' collections. Only the
+  // resolver that won the write gets here, so each round counts once.
+  await collectRoundWins({
+    code: opts.code,
+    seats: { host: room.host_id, guest: room.guest_id },
+    state: finalState,
+    attempts: room.state.pendingResult.attempts,
+  });
   return { state: finalState };
+}
+
+export type PeekResult =
+  | { ok: true; letter: string; state: PersistedGameState; fresh: boolean }
+  | { ok: false; reason: "not_found" | "forbidden" | "wrong_phase" | "off" | "used" | "no_word" | "concurrent_update" };
+
+/**
+ * F4 peek: reveals the second letter of a valid word for this round's
+ * letters, once per player per match. The word comes from the game word
+ * list (shortest length allowed, the middle one alphabetically, skipping
+ * words already played), so asking again in the same round returns the
+ * same letter. Only the round number is recorded in the state; the letter
+ * goes to the caller alone.
+ */
+export async function peekLetter(opts: { code: string; clientId: string }): Promise<PeekResult> {
+  if (!isValidCode(opts.code)) return { ok: false, reason: "not_found" };
+  const room = await getRoomByCode(opts.code);
+  if (!room) return { ok: false, reason: "not_found" };
+  const side = room.host_id === opts.clientId ? "host" : room.guest_id === opts.clientId ? "guest" : null;
+  if (!side) return { ok: false, reason: "forbidden" };
+  const { state } = room;
+  if (!state.settings.peek) return { ok: false, reason: "off" };
+  if (state.phase !== "race") return { ok: false, reason: "wrong_phase" };
+  const usedIn = state.peeks?.[side];
+  if (usedIn !== undefined && usedIn !== state.round) return { ok: false, reason: "used" };
+
+  // Same mapping as the UI: the first picker's letter starts the word.
+  const first = state.pick.firstPicker === "host";
+  const start = first ? state.pick.hostLetter : state.pick.guestLetter;
+  const end = first ? state.pick.guestLetter : state.pick.hostLetter;
+  if (!start || !end) return { ok: false, reason: "wrong_phase" };
+  const word = await peekWord(start, end, state.settings.minWordLength, state.usedWords.map((u) => u.word));
+  if (!word) return { ok: false, reason: "no_word" };
+  const letter = word[1].toUpperCase();
+
+  if (usedIn === state.round) return { ok: true, letter, state, fresh: false };
+  const nextState: PersistedGameState = { ...state, peeks: { ...state.peeks, [side]: state.round } };
+  const { data, error } = await supabaseAdmin()
+    .from("rooms")
+    .update({ state: nextState })
+    .eq("code", opts.code)
+    .eq("state->>phase", "race")
+    .eq("state->>round", String(state.round))
+    .select("code")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { ok: false, reason: "concurrent_update" };
+  return { ok: true, letter, state: nextState, fresh: true };
+}
+
+async function peekWord(start: string, end: string, min: number, played: string[]): Promise<string | null> {
+  const { getWordlist } = await import("./words/wordlist");
+  const set = await getWordlist();
+  const s = start.toLowerCase();
+  const e = end.toLowerCase();
+  const skip = new Set(played.map((w) => w.toLowerCase()));
+  let best: string[] = [];
+  let bestLen = Infinity;
+  for (const w of set) {
+    if (w.length < Math.max(min, 3) || w[0] !== s || w[w.length - 1] !== e || skip.has(w)) continue;
+    if (w.length < bestLen) {
+      bestLen = w.length;
+      best = [w];
+    } else if (w.length === bestLen) best.push(w);
+  }
+  if (best.length === 0) return null;
+  best.sort();
+  return best[Math.floor(best.length / 2)];
 }

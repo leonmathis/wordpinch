@@ -1,9 +1,8 @@
 import { NextResponse, after } from "next/server";
 import { getRoomByCode, isValidCode, recordAttempt, resolveRound } from "@/lib/rooms";
 import { broadcastRoomState } from "@/lib/realtime-server";
+import { resolveCallerId } from "@/lib/supabase/identity";
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Tie-detection window: time the first submitter's resolver waits before
@@ -77,11 +76,9 @@ export async function POST(request: Request, { params }: Params) {
         })
       : ({} as Record<string, unknown>);
 
-  if (typeof clientId !== "string" || !UUID_REGEX.test(clientId)) {
-    return NextResponse.json(
-      { error: "clientId must be a UUID v4 string" },
-      { status: 400 }
-    );
+  const callerId = await resolveCallerId(clientId);
+  if (!callerId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
   if (typeof word !== "string" || word.length === 0 || word.length > 50) {
     return NextResponse.json(
@@ -104,7 +101,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const result = await recordAttempt({
       code,
-      clientId,
+      clientId: callerId,
       word,
       phonetic: safePhonetic,
       audio: safeAudio,

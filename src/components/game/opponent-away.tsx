@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { TriangleAlert } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Pause } from "lucide-react";
 import type { GameCtx } from "@/lib/game/types";
+import { StatusPill } from "./kit/status-pill";
+import { cn } from "@/lib/utils";
 
 /**
  * Grace period (ms) after the opponent drops out of presence before the
@@ -38,7 +39,7 @@ const GRACE_SECONDS = Math.ceil(FORFEIT_GRACE_MS / 1000);
  * `ctx.meIsReferee`) fires the forfeit, and it keeps retrying while the
  * banner is mounted so a handover landing mid-countdown still resolves.
  */
-export function OpponentAwayBanner({ ctx }: { ctx: GameCtx }) {
+export function OpponentAwayBanner({ ctx, className }: { ctx: GameCtx; className?: string }) {
   const [secondsLeft, setSecondsLeft] = React.useState(GRACE_SECONDS);
 
   // Latest values reachable from the timers without re-arming them on every
@@ -99,18 +100,15 @@ export function OpponentAwayBanner({ ctx }: { ctx: GameCtx }) {
   }, []);
 
   return (
-    <Alert variant="destructive" className="mb-4">
-      <TriangleAlert />
-      <AlertDescription className="font-mono text-[13px]">
-        {secondsLeft > 0 ? (
-          <>
-            {ctx.them.name} disconnected · forfeits in{" "}
-            <span className="tabular-nums">{secondsLeft}s</span>
-          </>
-        ) : (
-          <>{ctx.them.name} is still away · ending the round…</>
-        )}
-      </AlertDescription>
-    </Alert>
+    <StatusPill tone="attention" icon={<Pause fill="currentColor" />} className={cn("mb-4", className)}>
+      {secondsLeft > 0 ? (
+        <>
+          {ctx.them.name} disconnected. They forfeit in{" "}
+          <span className="tabular-nums">{secondsLeft}&nbsp;s</span>.
+        </>
+      ) : (
+        <>{ctx.them.name} is still away. Ending the round…</>
+      )}
+    </StatusPill>
   );
 }

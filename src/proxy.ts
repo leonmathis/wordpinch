@@ -48,6 +48,35 @@ const LIMITS: LimitRule[] = [
     windowMs: MINUTE,
   },
   {
+    // Once per browser after its anonymous sign-in.
+    scope: "identity",
+    match: (p, m) => m === "POST" && p.startsWith("/api/identity/"),
+    limit: 30,
+    windowMs: MINUTE,
+  },
+  {
+    // F7: the waiting page polls every 1.5 s (40 a minute).
+    scope: "quick",
+    match: (p) => p === "/api/quick",
+    limit: 120,
+    windowMs: MINUTE,
+  },
+  {
+    // F6: start once a day, submit a few tries; GETs are cheap.
+    scope: "daily",
+    match: (p) => p.startsWith("/api/daily"),
+    limit: 60,
+    windowMs: MINUTE,
+  },
+  {
+    // Collection page and the match-end banner count (F2).
+    scope: "collection-reads",
+    match: (p, m) =>
+      m === "GET" && (p === "/api/collection" || (p.startsWith("/api/rooms/") && p.endsWith("/collected"))),
+    limit: 60,
+    windowMs: MINUTE,
+  },
+  {
     scope: "room-mutations",
     match: (p, m) => m === "POST" && p.startsWith("/api/rooms/"),
     limit: 180,
