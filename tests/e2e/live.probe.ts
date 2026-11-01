@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 
 /**
  * Two real players over Supabase: create, join, start, pick, reveal, race,
@@ -74,4 +75,42 @@ test("two players play a round", async ({ browser, browserName }) => {
   console.log("guest errors", guestErrs.filter((e) => !noise.test(e)));
   expect(hostErrs.filter((e) => !noise.test(e))).toEqual([]);
   expect(guestErrs.filter((e) => !noise.test(e))).toEqual([]);
+});
+
+const admin = () =>
+  createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+test("a stale snapshot can't undo the host's settings", async ({ browser, browserName }) => {
+  test.skip(browserName !== "chromium", "one engine is enough for the live flow");
+  const host = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext()).newPage();
+  await host.goto("/");
+  await host.locator('[data-landing="modes"]:visible button').first().click();
+  await host.waitForURL(/\/r\/[A-Z0-9]{4}$/, { timeout: 20_000 });
+  const code = host.url().slice(-4);
+  await guest.goto(`/r/${code}`);
+  await expect(host.getByRole("button", { name: "Start game" })).toBeEnabled({ timeout: 20_000 });
+  const rounds = async () => (await admin().from("rooms").select("state").eq("code", code).single()).data!.state.settings.rounds;
+  // The guest holds a lobby snapshot from before the host's change.
+  const stale = await guest.evaluate(async (c) => (await (await fetch(`/api/rooms/${c}`)).json()).state, code);
+  expect(stale.settings.rounds).toBe(5);
+  for (let i = 0; i < 4; i++) await host.getByRole("button", { name: "Decrease Rounds" }).click();
+  await expect.poll(rounds).toBe(1);
+
+  // The guest posts that old snapshot, as a referee's late transition would.
+  const status = await guest.evaluate(
+    async ([c, st]) => (await fetch(`/api/rooms/${c}/state`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actorId: localStorage.getItem("wordpinch:v1:client-id"), state: st }) })).status,
+    [code, stale] as const
+  );
+  console.log("stale post", status, "db rounds", await rounds());
+  expect(status).toBe(200);
+  expect(await rounds()).toBe(1);
+
+  // Both screens still run a one-round match.
+  await host.waitForTimeout(1500);
+  await host.getByRole("button", { name: "Start game" }).click();
+  for (const p of [host, guest]) await expect(p.locator(".wp-chrome")).toContainText("Round 1 of 1", { timeout: 20_000 });
+  expect(await rounds()).toBe(1);
 });

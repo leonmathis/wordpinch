@@ -5,7 +5,8 @@ export default defineConfig({
   testDir: ".",
   testMatch: /.*\.probe\.ts/,
   reporter: [["list"]],
-  use: { baseURL: "http://localhost:3000" },
+  // E2E_BASE_URL points the live probes at a deployment instead of the dev server.
+  use: { baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },

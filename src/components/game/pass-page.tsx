@@ -151,7 +151,7 @@ export function PassPage() {
               round={current}
               seat={stage.seat}
               me={name(stage.seat)}
-              other={name((1 - stage.seat) as Seat)}
+              other={firstName(name((1 - stage.seat) as Seat))}
               startedAt={stage.startedAt}
               onDone={(p) => finishTurn(stage.seat, p)}
             />
@@ -355,7 +355,7 @@ function Turn({
       <div className="flex min-w-0 items-center gap-3 rounded-full bg-card py-2 pr-4 pl-2">
         <Avatar name={me} size={36} side={SIDE[seat]} />
         <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{`${me}'s turn`}</span>
-        <span className="shrink-0 text-[13px] font-bold text-muted-foreground">
+        <span className="max-w-[55%] truncate text-[13px] font-bold text-muted-foreground">
           {otherPlay ? `${other} played · time hidden` : `${other} plays next`}
         </span>
       </div>

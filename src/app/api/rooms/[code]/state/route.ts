@@ -58,12 +58,12 @@ export async function POST(request: Request, { params }: Params) {
   const validated = parsed.data;
 
   try {
-    const ok = await updateRoomState({
+    const written = await updateRoomState({
       code,
       actorId: callerId,
       state: validated,
     });
-    if (!ok) {
+    if (!written) {
       return NextResponse.json(
         { error: "Room not found, or you don't hold a player slot in it" },
         { status: 403 }
@@ -76,7 +76,7 @@ export async function POST(request: Request, { params }: Params) {
     // broadcasts are recovered on next page load / reconnect, but `after`
     // is markedly more reliable than naked `void`.
     after(async () => {
-      await broadcastRoomState(code, validated);
+      await broadcastRoomState(code, written);
     });
     return NextResponse.json(
       { ok: true },

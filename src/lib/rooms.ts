@@ -125,13 +125,16 @@ export async function getRoomByCode(
  * On the matchend transition we always take `scores`, `usedWords` and
  * `rounds` from the current DB row, ignoring whatever the client sent —
  * the client never holds authoritative score info anyway.
+ *
+ * Returns the state as written (or null when the caller holds no seat), so
+ * the broadcast carries the server's corrections rather than the snapshot.
  */
 export async function updateRoomState(opts: {
   code: string;
   actorId: string;
   state: PersistedGameState;
-}): Promise<boolean> {
-  if (!isValidCode(opts.code)) return false;
+}): Promise<PersistedGameState | null> {
+  if (!isValidCode(opts.code)) return null;
   const admin = supabaseAdmin();
   // PostgREST `or` filter — the actor must hold one of the two player slots.
   // `actorId` is UUID-validated by the route before it reaches this point.
@@ -144,14 +147,17 @@ export async function updateRoomState(opts: {
     .or(actorFilter)
     .maybeSingle();
   if (current.error) throw current.error;
-  if (!current.data) return false;
+  if (!current.data) return null;
   const currentState = current.data.state as PersistedGameState;
 
   // Server-owned fields always come from the row, never from the client's
   // snapshot, which may predate them (a referee's timeout POST carrying a
-  // state from before the other player's peek wiped it).
+  // state from before the other player's peek wiped it). Settings change
+  // only through `updateRoomSettings`; a snapshot from before the host's
+  // last change put a one-round match back to five rounds on Vercel.
   let stateToWrite: PersistedGameState = {
     ...opts.state,
+    settings: currentState.settings,
     matchStartedAt: currentState.matchStartedAt,
     usedLetters: currentState.usedLetters,
     peeks: currentState.peeks,
@@ -192,7 +198,7 @@ export async function updateRoomState(opts: {
     .maybeSingle();
 
   if (error) throw error;
-  return data !== null;
+  return data ? stateToWrite : null;
 }
 
 export type SettingsResult =
