@@ -65,6 +65,16 @@ test.describe("race", () => {
     }
   });
 
+  test("on a 375 px phone the gap between the letters stays on one line", async ({ page }) => {
+    test.skip(page.viewportSize()!.width >= 768, "phones only");
+    // iPhone SE / mini width: there the "_ _ _" broke in two.
+    await page.setViewportSize({ width: 375, height: 667 });
+    await open(page, "race", "as=host");
+    const gap = page.locator("[role=img]:visible span[aria-hidden]").filter({ hasText: /^_ _ _$/ });
+    const lines = await gap.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+    expect(lines).toBe(1);
+  });
+
   test("top bar, slots and the opponent row", async ({ page }) => {
     await open(page, "race", "as=host");
     await expect(page.locator(".wp-chrome")).toContainText("Round 3 of 7 · Leon 2 · 1 Juno");

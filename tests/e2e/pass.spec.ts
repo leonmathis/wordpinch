@@ -167,6 +167,19 @@ test.describe("pass the phone", () => {
     expect(msg.y + msg.height).toBeLessThanOrEqual(vp.height - 291);
   });
 
+  test("on a 375 px phone the gap between the letters stays on one line", async ({ page }) => {
+    test.skip(page.viewportSize()!.width >= 768, "phones only");
+    // iPhone SE / mini width: there the "_ _ _" beside the timer broke in two.
+    await page.setViewportSize({ width: 375, height: 667 });
+    await open(page);
+    await page.getByRole("button", { name: "Start · 5 rounds" }).click();
+    await page.getByRole("button", { name: /tap when ready/ }).click();
+    const gap = page.getByRole("img", { name: /^Starts with/ }).locator("span[aria-hidden]").filter({ hasText: "_ _ _" });
+    const lines = await gap.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+    expect(lines).toBe(1);
+    await clean(page);
+  });
+
   test("stress: 32-character names wrap or truncate, nothing overflows", async ({ page }, testInfo) => {
     await open(page);
     await page.getByLabel("Player 1 name").fill("Maximiliana Wolkenstein-Haberlin");

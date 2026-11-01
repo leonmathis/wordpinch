@@ -56,7 +56,7 @@ export function LetterSlots({
           <span className="tracking-[3px] whitespace-nowrap">_ _</span>
         </span>
       ) : (
-        <span aria-hidden className="font-hand tracking-[3px] text-muted-foreground" style={{ fontSize: dash }}>
+        <span aria-hidden className="font-hand tracking-[3px] whitespace-nowrap text-muted-foreground" style={{ fontSize: dash }}>
           _ _ _
         </span>
       )}
